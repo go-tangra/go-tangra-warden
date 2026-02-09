@@ -55,9 +55,10 @@ func NewBitwardenTransferService(
 
 // bitwardenExportJSON represents the Bitwarden export file format
 type bitwardenExportJSON struct {
-	Encrypted bool                `json:"encrypted"`
-	Folders   []bitwardenFolderJS `json:"folders"`
-	Items     []bitwardenItemJSON `json:"items"`
+	Encrypted   bool                `json:"encrypted"`
+	Folders     []bitwardenFolderJS `json:"folders"`
+	Collections []bitwardenFolderJS `json:"collections"`
+	Items       []bitwardenItemJSON `json:"items"`
 }
 
 type bitwardenFolderJS struct {
@@ -68,6 +69,7 @@ type bitwardenFolderJS struct {
 type bitwardenItemJSON struct {
 	ID              string                       `json:"id"`
 	FolderID        *string                      `json:"folderId,omitempty"`
+	CollectionIDs   []string                     `json:"collectionIds,omitempty"`
 	Type            int                          `json:"type"`
 	Name            string                       `json:"name"`
 	Notes           *string                      `json:"notes,omitempty"`
@@ -100,6 +102,20 @@ type bitwardenFieldJSON struct {
 type bitwardenPasswordHistoryJS struct {
 	LastUsedDate string `json:"lastUsedDate"`
 	Password     string `json:"password"`
+}
+
+// normalizeExport merges Bitwarden organization export fields (collections/collectionIds)
+// into the standard personal vault fields (folders/folderId) so downstream logic works unchanged.
+func normalizeExport(export *bitwardenExportJSON) {
+	export.Folders = append(export.Folders, export.Collections...)
+	export.Collections = nil
+
+	for i := range export.Items {
+		if export.Items[i].FolderID == nil && len(export.Items[i].CollectionIDs) > 0 {
+			export.Items[i].FolderID = &export.Items[i].CollectionIDs[0]
+		}
+		export.Items[i].CollectionIDs = nil
+	}
 }
 
 // ExportToBitwarden exports secrets to Bitwarden JSON format
@@ -266,6 +282,9 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 	if err := json.Unmarshal([]byte(req.JsonData), &export); err != nil {
 		return nil, wardenV1.ErrorInvalidFormat("invalid JSON format: " + err.Error())
 	}
+
+	// Normalize organization exports (collections -> folders)
+	normalizeExport(&export)
 
 	// Check if encrypted (not supported)
 	if export.Encrypted {
@@ -501,6 +520,9 @@ func (s *BitwardenTransferService) ValidateBitwardenImport(ctx context.Context, 
 		resp.Errors = append(resp.Errors, "Invalid JSON format: "+err.Error())
 		return resp, nil
 	}
+
+	// Normalize organization exports (collections -> folders)
+	normalizeExport(&export)
 
 	// Check if encrypted
 	if export.Encrypted {
