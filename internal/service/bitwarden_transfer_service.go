@@ -306,46 +306,104 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 	// Import folders if preserving structure
 	bitwardenToWardenFolder := make(map[string]string) // Bitwarden ID -> Warden ID
+	// Cache for intermediate folders created during path traversal (DB path -> folder ID)
+	pathToFolderID := make(map[string]string)
 
 	if req.PreserveFolders {
+		// Resolve target folder's path prefix for correct DB path lookups
+		var targetPathPrefix string
+		if req.TargetFolderId != nil && *req.TargetFolderId != "" {
+			targetFolder, err := s.folderRepo.GetByID(ctx, *req.TargetFolderId)
+			if err == nil && targetFolder != nil {
+				targetPathPrefix = targetFolder.Path
+			}
+		}
+
 		for _, bwFolder := range export.Folders {
-			// Determine parent folder
-			var parentID *string
-			if req.TargetFolderId != nil && *req.TargetFolderId != "" {
-				parentID = req.TargetFolderId
+			// Parse path segments, filtering out empty parts (from leading slashes)
+			parts := strings.Split(bwFolder.Name, "/")
+			var segments []string
+			for _, p := range parts {
+				if p != "" {
+					segments = append(segments, p)
+				}
 			}
-
-			// Parse folder path to create nested structure
-			folderName := bwFolder.Name
-			if strings.Contains(bwFolder.Name, "/") {
-				// Handle nested paths
-				parts := strings.Split(bwFolder.Name, "/")
-				folderName = parts[len(parts)-1]
-			}
-
-			// Create folder
-			folder, err := s.folderRepo.Create(ctx, tenantID, parentID, folderName, "", createdBy)
-			if err != nil {
-				resp.Errors = append(resp.Errors, &wardenV1.ImportError{
-					BitwardenId: bwFolder.ID,
-					ItemName:    bwFolder.Name,
-					ErrorType:   "folder_creation",
-					Message:     err.Error(),
-				})
+			if len(segments) == 0 {
 				continue
 			}
 
-			bitwardenToWardenFolder[bwFolder.ID] = folder.ID
-			resp.FolderIdMapping[bwFolder.ID] = folder.ID
-			resp.FoldersCreated++
-
-			// Grant owner permission
-			if createdBy != nil {
-				_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
+			// Walk the path, creating intermediate folders as needed (find-or-create)
+			var currentParentID *string
+			if req.TargetFolderId != nil && *req.TargetFolderId != "" {
+				currentParentID = req.TargetFolderId
 			}
 
-			// Apply import permission rules
-			s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeFolder, folder.ID, req.PermissionRules, createdBy)
+			var leafFolderID string
+			failed := false
+
+			for i, segment := range segments {
+				// Compute the expected DB path for this folder
+				dbPath := targetPathPrefix + "/" + strings.Join(segments[:i+1], "/")
+
+				// Check cache first
+				if cachedID, ok := pathToFolderID[dbPath]; ok {
+					currentParentID = &cachedID
+					leafFolderID = cachedID
+					continue
+				}
+
+				// Try to find existing folder by its DB path
+				folder, err := s.folderRepo.GetByTenantAndPath(ctx, tenantID, dbPath)
+				if err != nil {
+					resp.Errors = append(resp.Errors, &wardenV1.ImportError{
+						BitwardenId: bwFolder.ID,
+						ItemName:    bwFolder.Name,
+						ErrorType:   "folder_lookup",
+						Message:     err.Error(),
+					})
+					failed = true
+					break
+				}
+
+				if folder != nil {
+					// Folder already exists, reuse it
+					pathToFolderID[dbPath] = folder.ID
+					currentParentID = &folder.ID
+					leafFolderID = folder.ID
+					continue
+				}
+
+				// Create the folder
+				folder, err = s.folderRepo.Create(ctx, tenantID, currentParentID, segment, "", createdBy)
+				if err != nil {
+					resp.Errors = append(resp.Errors, &wardenV1.ImportError{
+						BitwardenId: bwFolder.ID,
+						ItemName:    bwFolder.Name,
+						ErrorType:   "folder_creation",
+						Message:     err.Error(),
+					})
+					failed = true
+					break
+				}
+
+				pathToFolderID[dbPath] = folder.ID
+				currentParentID = &folder.ID
+				leafFolderID = folder.ID
+				resp.FoldersCreated++
+
+				// Grant owner permission on newly created folder
+				if createdBy != nil {
+					_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
+				}
+
+				// Apply import permission rules
+				s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeFolder, folder.ID, req.PermissionRules, createdBy)
+			}
+
+			if !failed && leafFolderID != "" {
+				bitwardenToWardenFolder[bwFolder.ID] = leafFolderID
+				resp.FolderIdMapping[bwFolder.ID] = leafFolderID
+			}
 		}
 	}
 
