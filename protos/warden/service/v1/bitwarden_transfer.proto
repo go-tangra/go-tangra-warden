@@ -7,6 +7,7 @@ import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
+import "warden/service/v1/permission.proto";
 
 // Bitwarden Transfer Service - handles import/export in Bitwarden JSON format
 service WardenBitwardenTransferService {
@@ -135,6 +136,13 @@ message ExportToBitwardenResponse {
   string suggested_filename = 5 [json_name = "suggestedFilename"];
 }
 
+// Permission rule to apply to all imported items
+message ImportPermissionRule {
+  SubjectType subject_type = 1 [json_name = "subjectType"];
+  string subject_id = 2 [json_name = "subjectId"];
+  Relation relation = 3 [json_name = "relation"];
+}
+
 // Import request
 message ImportFromBitwardenRequest {
   // JSON data (Bitwarden export format)
@@ -158,6 +166,9 @@ message ImportFromBitwardenRequest {
 
   // Whether to import folder structure or flatten to target folder
   bool preserve_folders = 4 [json_name = "preserveFolders"];
+
+  // Permission rules to apply to all imported folders and secrets
+  repeated ImportPermissionRule permission_rules = 5 [json_name = "permissionRules"];
 }
 
 message ImportFromBitwardenResponse {

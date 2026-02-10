@@ -7,7 +7,7 @@ require (
 	entgo.io/ent v0.14.5
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/go-tangra/go-tangra-common v0.3.0
+	github.com/go-tangra/go-tangra-common v0.4.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/hashicorp/vault/api v1.22.0
@@ -17,7 +17,6 @@ require (
 	github.com/menta2k/protoc-gen-redact/v3 v3.0.0-20251106150014-896cdd075ab1
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/tx7do/go-crud/entgo v0.0.38
-	github.com/tx7do/go-crud/viewer v0.0.5
 	github.com/tx7do/kratos-bootstrap/api v0.0.34
 	github.com/tx7do/kratos-bootstrap/bootstrap v0.1.16
 	github.com/tx7do/kratos-bootstrap/cache/redis v0.1.1
@@ -96,6 +95,7 @@ require (
 	github.com/tx7do/go-crud/api v0.0.7 // indirect
 	github.com/tx7do/go-crud/audit v0.0.2 // indirect
 	github.com/tx7do/go-crud/pagination v0.0.11 // indirect
+	github.com/tx7do/go-crud/viewer v0.0.6 // indirect
 	github.com/tx7do/go-utils v1.1.34 // indirect
 	github.com/tx7do/go-utils/id v0.0.2 // indirect
 	github.com/tx7do/go-utils/mapper v0.0.3 // indirect

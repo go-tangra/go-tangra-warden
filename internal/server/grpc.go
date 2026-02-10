@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-tangra/go-tangra-common/middleware/audit"
 	"github.com/go-tangra/go-tangra-common/middleware/mtls"
-	appViewer "github.com/go-tangra/go-tangra-warden/pkg/viewer"
+	appViewer "github.com/go-tangra/go-tangra-common/viewer"
 )
 
 // systemViewerMiddleware injects system viewer context for all requests

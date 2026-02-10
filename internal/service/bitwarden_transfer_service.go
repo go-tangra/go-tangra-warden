@@ -343,6 +343,9 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 			if createdBy != nil {
 				_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
 			}
+
+			// Apply import permission rules
+			s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeFolder, folder.ID, req.PermissionRules, createdBy)
 		}
 	}
 
@@ -484,12 +487,25 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 			_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secret.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
 		}
 
+		// Apply import permission rules
+		s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeSecret, secret.ID, req.PermissionRules, createdBy)
+
 		resp.ItemIdMapping[bwItem.ID] = secret.ID
 		existingNames[strings.ToLower(name)] = true
 		resp.ItemsImported++
 	}
 
 	return resp, nil
+}
+
+// applyImportPermissionRules grants the specified permission rules on a resource
+func (s *BitwardenTransferService) applyImportPermissionRules(ctx context.Context, tenantID uint32, resourceType authz.ResourceType, resourceID string, rules []*wardenV1.ImportPermissionRule, createdBy *uint32) {
+	for _, rule := range rules {
+		if rule.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_UNSPECIFIED || rule.SubjectId == "" || rule.Relation == wardenV1.Relation_RELATION_UNSPECIFIED {
+			continue
+		}
+		_, _ = s.permRepo.Create(ctx, tenantID, string(resourceType), resourceID, rule.Relation.String(), rule.SubjectType.String(), rule.SubjectId, createdBy, nil)
+	}
 }
 
 // ValidateBitwardenImport validates a Bitwarden import without making changes
