@@ -168,19 +168,25 @@ func (s *PermissionService) ListPermissions(ctx context.Context, req *wardenV1.L
 		subjectType = &st
 	}
 
-	permissions, total, err := s.permRepo.List(ctx, tenantID, resourceType, req.ResourceId, subjectType, req.SubjectId, page, pageSize)
+	permissions, _, err := s.permRepo.List(ctx, tenantID, resourceType, req.ResourceId, subjectType, req.SubjectId, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
+	// Filter permissions: only return tuples for resources the user can access.
+	// This prevents users from discovering permissions on resources they cannot read.
 	protoPermissions := make([]*wardenV1.PermissionTuple, 0, len(permissions))
 	for _, p := range permissions {
+		rt := authz.ResourceType(p.ResourceType)
+		if err := s.checker.CanRead(ctx, tenantID, userID, rt, p.ResourceID); err != nil {
+			continue
+		}
 		protoPermissions = append(protoPermissions, s.permRepo.ToProto(p))
 	}
 
 	return &wardenV1.ListPermissionsResponse{
 		Permissions: protoPermissions,
-		Total:       uint32(total),
+		Total:       uint32(len(protoPermissions)),
 	}, nil
 }
 

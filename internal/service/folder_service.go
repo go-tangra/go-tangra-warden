@@ -231,9 +231,57 @@ func (s *FolderService) GetFolderTree(ctx context.Context, req *wardenV1.GetFold
 		return nil, err
 	}
 
+	// Get folder IDs directly accessible by this user (via user, role, or tenant permissions)
+	accessibleIDs, err := s.checker.ListAccessibleFolders(ctx, tenantID, userID)
+	if err != nil {
+		s.log.Warnf("failed to list accessible folders: %v", err)
+		accessibleIDs = []string{}
+	}
+
+	accessibleSet := make(map[string]bool, len(accessibleIDs))
+	for _, id := range accessibleIDs {
+		accessibleSet[id] = true
+	}
+
+	// Prune tree: only show folders the user can access.
+	// Zanzibar hierarchy means children of accessible folders are also accessible.
+	// Structural parent nodes are kept (with hidden secret counts) when needed
+	// to show the path to accessible descendants.
+	roots = pruneTreeByAccess(roots, accessibleSet, false)
+
 	return &wardenV1.GetFolderTreeResponse{
 		Roots: roots,
 	}, nil
+}
+
+// pruneTreeByAccess filters the folder tree to only show accessible folders.
+// A folder is accessible if it has a direct permission tuple OR its parent is accessible
+// (Zanzibar hierarchy: parent folder access implies child folder access).
+// Folders with no access are kept as structural nodes only if they have accessible
+// descendants, with their secret counts hidden.
+func pruneTreeByAccess(nodes []*wardenV1.FolderTreeNode, accessibleIDs map[string]bool, parentAccessible bool) []*wardenV1.FolderTreeNode {
+	result := make([]*wardenV1.FolderTreeNode, 0, len(nodes))
+	for _, node := range nodes {
+		isDirectlyAccessible := accessibleIDs[node.Folder.Id]
+		isAccessible := isDirectlyAccessible || parentAccessible
+
+		// Recursively prune children, inheriting accessibility
+		node.Children = pruneTreeByAccess(node.Children, accessibleIDs, isAccessible)
+
+		// Keep node if accessible or needed as structural path to accessible descendants
+		if isAccessible || len(node.Children) > 0 {
+			// Update subfolder count to reflect only visible children
+			node.Folder.SubfolderCount = int32(len(node.Children))
+
+			// Hide secret count for structural-only nodes (not accessible, just a path node)
+			if !isAccessible {
+				node.Folder.SecretCount = 0
+			}
+
+			result = append(result, node)
+		}
+	}
+	return result
 }
 
 // Helper functions are now in context_helper.go
