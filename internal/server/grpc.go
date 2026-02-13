@@ -113,11 +113,11 @@ func NewGRPCServer(
 	srv := grpc.NewServer(opts...)
 
 	// Register services
-	wardenV1.RegisterWardenFolderServiceServer(srv, folderSvc)
-	wardenV1.RegisterWardenSecretServiceServer(srv, secretSvc)
-	wardenV1.RegisterWardenPermissionServiceServer(srv, permissionSvc)
-	wardenV1.RegisterWardenSystemServiceServer(srv, systemSvc)
-	wardenV1.RegisterWardenBitwardenTransferServiceServer(srv, bitwardenTransferSvc)
+	wardenV1.RegisterRedactedWardenFolderServiceServer(srv, folderSvc, nil)
+	wardenV1.RegisterRedactedWardenSecretServiceServer(srv, secretSvc, nil)
+	wardenV1.RegisterRedactedWardenPermissionServiceServer(srv, permissionSvc, nil)
+	wardenV1.RegisterRedactedWardenSystemServiceServer(srv, systemSvc, nil)
+	wardenV1.RegisterRedactedWardenBitwardenTransferServiceServer(srv, bitwardenTransferSvc, nil)
 
 	return srv
 }

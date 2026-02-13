@@ -177,7 +177,9 @@ func (s *FolderService) DeleteFolder(ctx context.Context, req *wardenV1.DeleteFo
 	}
 
 	// Delete associated permissions
-	_ = s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeFolder), req.Id)
+	if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeFolder), req.Id); err != nil {
+		s.log.Warnf("Failed to delete permissions for folder %s: %v", req.Id, err)
+	}
 
 	return &emptypb.Empty{}, nil
 }

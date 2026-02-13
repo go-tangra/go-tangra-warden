@@ -82,7 +82,9 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 	secretEntity, err := s.secretRepo.Create(ctx, tenantID, req.FolderId, req.Name, req.Username, req.HostUrl, vaultPath, req.Description, metadata, createdBy)
 	if err != nil {
 		// Try to clean up Vault on failure
-		_ = s.kvStore.DestroyAllVersions(ctx, vaultPath)
+		if cleanupErr := s.kvStore.DestroyAllVersions(ctx, vaultPath); cleanupErr != nil {
+			s.log.Warnf("Failed to clean up Vault path %s after secret creation failure: %v", vaultPath, cleanupErr)
+		}
 		return nil, err
 	}
 
@@ -335,7 +337,9 @@ func (s *SecretService) DeleteSecret(ctx context.Context, req *wardenV1.DeleteSe
 	}
 
 	// Delete associated permissions
-	_ = s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeSecret), req.Id)
+	if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeSecret), req.Id); err != nil {
+		s.log.Warnf("Failed to delete permissions for secret %s: %v", req.Id, err)
+	}
 
 	return &emptypb.Empty{}, nil
 }

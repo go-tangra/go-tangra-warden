@@ -7,6 +7,7 @@ import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
+import "redact/v3/redact.proto";
 import "warden/service/v1/permission.proto";
 
 // Bitwarden Transfer Service - handles import/export in Bitwarden JSON format
@@ -61,21 +62,21 @@ message BitwardenUri {
 message BitwardenLogin {
   repeated BitwardenUri uris = 1 [json_name = "uris"];
   string username = 2 [json_name = "username"];
-  string password = 3 [json_name = "password"];
-  optional string totp = 4 [json_name = "totp"];
+  string password = 3 [json_name = "password", (redact.v3.value).string = ""];
+  optional string totp = 4 [json_name = "totp", (redact.v3.value).string = ""];
 }
 
 // Bitwarden custom field
 message BitwardenField {
   string name = 1 [json_name = "name"];
-  string value = 2 [json_name = "value"];
+  string value = 2 [json_name = "value", (redact.v3.value).string = ""];
   int32 type = 3 [json_name = "type"]; // 0=Text, 1=Hidden, 2=Boolean, 3=Linked
 }
 
 // Bitwarden password history entry
 message BitwardenPasswordHistory {
   string last_used_date = 1 [json_name = "lastUsedDate"];
-  string password = 2 [json_name = "password"];
+  string password = 2 [json_name = "password", (redact.v3.value).string = ""];
 }
 
 // Bitwarden item (secret)
@@ -125,7 +126,7 @@ message ExportToBitwardenRequest {
 
 message ExportToBitwardenResponse {
   // JSON string in Bitwarden format
-  string json_data = 1 [json_name = "jsonData"];
+  string json_data = 1 [json_name = "jsonData", (redact.v3.value).string = ""];
 
   // Statistics
   int32 folders_exported = 2 [json_name = "foldersExported"];
@@ -149,7 +150,8 @@ message ImportFromBitwardenRequest {
   string json_data = 1 [
     json_name = "jsonData",
     (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).string = {min_len: 2, max_len: 10485760}  // Max 10MB
+    (buf.validate.field).string = {min_len: 2, max_len: 10485760},  // Max 10MB
+    (redact.v3.value).string = ""
   ];
 
   // Target folder to import into (null for root)
@@ -198,7 +200,8 @@ message ValidateBitwardenImportRequest {
   string json_data = 1 [
     json_name = "jsonData",
     (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).string = {min_len: 2, max_len: 10485760}
+    (buf.validate.field).string = {min_len: 2, max_len: 10485760},
+    (redact.v3.value).string = ""
   ];
 
   optional string target_folder_id = 2 [

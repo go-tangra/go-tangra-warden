@@ -23,6 +23,7 @@ deps:
   - 'buf.build/googleapis/googleapis'
   - 'buf.build/bufbuild/protovalidate'
   - 'buf.build/kratos/apis'
+  - 'buf.build/menta2k-org/redact'
 
 lint:
   use:

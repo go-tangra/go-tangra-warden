@@ -9,6 +9,7 @@ managed:
     - module: buf.build/googleapis/googleapis
     - module: buf.build/bufbuild/protovalidate
     - module: buf.build/kratos/apis
+    - module: buf.build/menta2k-org/redact
 
   override:
     - file_option: go_package

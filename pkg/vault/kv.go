@@ -65,7 +65,7 @@ func (s *KVStore) StorePassword(ctx context.Context, path, password string, meta
 		version = secret.VersionMetadata.Version
 	}
 
-	s.client.log.Debugf("Stored password at path %s, version %d", path, version)
+	s.client.log.Infof("Stored password at path %s, version %d", path, version)
 	return version, nil
 }
 
@@ -124,7 +124,7 @@ func (s *KVStore) DeletePassword(ctx context.Context, path string) error {
 		return fmt.Errorf("failed to delete password from Vault: %w", err)
 	}
 
-	s.client.log.Debugf("Deleted password at path %s", path)
+	s.client.log.Infof("Deleted password at path %s", path)
 	return nil
 }
 
@@ -136,7 +136,7 @@ func (s *KVStore) DeletePasswordVersions(ctx context.Context, path string, versi
 		return fmt.Errorf("failed to delete password versions from Vault: %w", err)
 	}
 
-	s.client.log.Debugf("Deleted password versions %v at path %s", versions, path)
+	s.client.log.Infof("Deleted password versions %v at path %s", versions, path)
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (s *KVStore) DestroyPassword(ctx context.Context, path string, versions []i
 		return fmt.Errorf("failed to destroy password in Vault: %w", err)
 	}
 
-	s.client.log.Debugf("Destroyed password versions %v at path %s", versions, path)
+	s.client.log.Infof("Destroyed password versions %v at path %s", versions, path)
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (s *KVStore) DestroyAllVersions(ctx context.Context, path string) error {
 		return fmt.Errorf("failed to destroy all password versions in Vault: %w", err)
 	}
 
-	s.client.log.Debugf("Destroyed all versions at path %s", path)
+	s.client.log.Infof("Destroyed all versions at path %s", path)
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (s *KVStore) UndeletePassword(ctx context.Context, path string, versions []
 		return fmt.Errorf("failed to undelete password versions from Vault: %w", err)
 	}
 
-	s.client.log.Debugf("Undeleted password versions %v at path %s", versions, path)
+	s.client.log.Infof("Undeleted password versions %v at path %s", versions, path)
 	return nil
 }
 

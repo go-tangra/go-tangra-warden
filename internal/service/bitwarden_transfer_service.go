@@ -393,7 +393,9 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 				// Grant owner permission on newly created folder
 				if createdBy != nil {
-					_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
+					if _, permErr := s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil); permErr != nil {
+						s.log.Warnf("Failed to grant owner permission on imported folder %s: %v", folder.ID, permErr)
+					}
 				}
 
 				// Apply import permission rules
@@ -525,7 +527,9 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 		secret, err := s.secretRepo.Create(ctx, tenantID, targetFolderID, name, bwItem.Login.Username, hostURL, vaultPath, description, metadata, createdBy)
 		if err != nil {
 			// Cleanup Vault on failure
-			_ = s.kvStore.DestroyAllVersions(ctx, vaultPath)
+			if cleanupErr := s.kvStore.DestroyAllVersions(ctx, vaultPath); cleanupErr != nil {
+				s.log.Warnf("Failed to clean up Vault path %s after import failure: %v", vaultPath, cleanupErr)
+			}
 			resp.Errors = append(resp.Errors, &wardenV1.ImportError{
 				BitwardenId: bwItem.ID,
 				ItemName:    bwItem.Name,
@@ -538,11 +542,15 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 		// Create initial version record
 		checksum := vault.CalculateChecksum(bwItem.Login.Password)
-		_, _ = s.versionRepo.Create(ctx, secret.ID, 1, vaultPath, "Imported from Bitwarden", checksum, createdBy)
+		if _, versionErr := s.versionRepo.Create(ctx, secret.ID, 1, vaultPath, "Imported from Bitwarden", checksum, createdBy); versionErr != nil {
+			s.log.Warnf("Failed to create version record for imported secret %s: %v", secret.ID, versionErr)
+		}
 
 		// Grant owner permission
 		if createdBy != nil {
-			_, _ = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secret.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
+			if _, permErr := s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secret.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil); permErr != nil {
+				s.log.Warnf("Failed to grant owner permission on imported secret %s: %v", secret.ID, permErr)
+			}
 		}
 
 		// Apply import permission rules
@@ -562,7 +570,9 @@ func (s *BitwardenTransferService) applyImportPermissionRules(ctx context.Contex
 		if rule.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_UNSPECIFIED || rule.SubjectId == "" || rule.Relation == wardenV1.Relation_RELATION_UNSPECIFIED {
 			continue
 		}
-		_, _ = s.permRepo.Create(ctx, tenantID, string(resourceType), resourceID, rule.Relation.String(), rule.SubjectType.String(), rule.SubjectId, createdBy, nil)
+		if _, permErr := s.permRepo.Create(ctx, tenantID, string(resourceType), resourceID, rule.Relation.String(), rule.SubjectType.String(), rule.SubjectId, createdBy, nil); permErr != nil {
+			s.log.Warnf("Failed to apply import permission rule on %s %s: %v", resourceType, resourceID, permErr)
+		}
 	}
 }
 

@@ -79,8 +79,7 @@ func (s *PermissionService) GrantAccess(ctx context.Context, req *wardenV1.Grant
 		expiresAt = &t
 	}
 
-	var expiresAtTime *int64
-	_ = expiresAtTime
+	// TODO: Convert expiresAt to time.Time for permRepo.Create
 	_ = expiresAt
 
 	permission, err := s.permRepo.Create(

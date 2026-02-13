@@ -240,7 +240,7 @@ func (c *Client) renewToken(ctx context.Context, secret *vault.Secret) {
 			}
 			go watcher.Start()
 		case info := <-watcher.RenewCh():
-			c.log.Debugf("Vault token renewed, next renewal in %ds", info.Secret.Auth.LeaseDuration)
+			c.log.Infof("Vault token renewed, next renewal in %ds", info.Secret.Auth.LeaseDuration)
 		}
 	}
 }
