@@ -43,6 +43,59 @@ menus:
       - platform:admin
       - tenant:manager
 
+dashboard_widgets:
+  - id: warden.total_secrets
+    name: Total Secrets
+    description: Active and total secret counts
+    icon: lucide:key-round
+    widget_type: stat_card
+    data_source:
+      endpoint: /admin/v1/modules/warden/v1/stats
+      method: GET
+    data_mapping:
+      value_path: activeSecrets
+      total_path: totalSecrets
+      label: Active Secrets
+    default_size:
+      width: 3
+      height: 1
+    tags: [warden, overview]
+    authority: [platform:admin, tenant:manager]
+
+  - id: warden.folders_count
+    name: Folders
+    description: Total secret folders
+    icon: lucide:folder-lock
+    widget_type: stat_card
+    data_source:
+      endpoint: /admin/v1/modules/warden/v1/stats
+      method: GET
+    data_mapping:
+      value_path: totalFolders
+      label: Folders
+    default_size:
+      width: 3
+      height: 1
+    tags: [warden, overview]
+    authority: [platform:admin, tenant:manager]
+
+  - id: warden.versions_stat
+    name: Secret Versions
+    description: Total secret version history entries
+    icon: lucide:history
+    widget_type: stat_card
+    data_source:
+      endpoint: /admin/v1/modules/warden/v1/stats
+      method: GET
+    data_mapping:
+      value_path: totalVersions
+      label: Total Versions
+    default_size:
+      width: 3
+      height: 1
+    tags: [warden, overview]
+    authority: [platform:admin, tenant:manager]
+
 permission_groups:
   - name: Warden
     module: warden

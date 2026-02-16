@@ -27,6 +27,13 @@ service WardenSystemService {
       get: "/v1/vault/check"
     };
   }
+
+  // Get statistics for dashboard
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats"
+    };
+  }
 }
 
 // Health status
@@ -60,4 +67,17 @@ message CheckVaultResponse {
   string vault_version = 2 [json_name = "vaultVersion"];
   bool sealed = 3 [json_name = "sealed"];
   string message = 4 [json_name = "message"];
+}
+
+message GetStatsRequest {
+  optional uint32 tenant_id = 1 [json_name = "tenantId"];
+}
+
+message GetStatsResponse {
+  int64 total_secrets = 1 [json_name = "totalSecrets"];
+  int64 active_secrets = 2 [json_name = "activeSecrets"];
+  int64 archived_secrets = 3 [json_name = "archivedSecrets"];
+  int64 total_folders = 4 [json_name = "totalFolders"];
+  int64 total_versions = 5 [json_name = "totalVersions"];
+  double avg_versions_per_secret = 6 [json_name = "avgVersionsPerSecret"];
 }
