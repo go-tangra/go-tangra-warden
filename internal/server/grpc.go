@@ -43,6 +43,7 @@ func NewGRPCServer(
 	permissionSvc *service.PermissionService,
 	systemSvc *service.SystemService,
 	bitwardenTransferSvc *service.BitwardenTransferService,
+	backupSvc *service.BackupService,
 ) *grpc.Server {
 	cfg := ctx.GetConfig()
 	l := ctx.NewLoggerHelper("warden/grpc")
@@ -102,6 +103,8 @@ func NewGRPCServer(
 		audit.WithSkipOperations(
 			"/grpc.health.v1.Health/Check",
 			"/grpc.health.v1.Health/Watch",
+			"/warden.service.v1.BackupService/ExportBackup",
+			"/warden.service.v1.BackupService/ImportBackup",
 		),
 	))
 
@@ -118,6 +121,7 @@ func NewGRPCServer(
 	wardenV1.RegisterRedactedWardenPermissionServiceServer(srv, permissionSvc, nil)
 	wardenV1.RegisterRedactedWardenSystemServiceServer(srv, systemSvc, nil)
 	wardenV1.RegisterRedactedWardenBitwardenTransferServiceServer(srv, bitwardenTransferSvc, nil)
+	wardenV1.RegisterRedactedBackupServiceServer(srv, backupSvc, nil)
 
 	return srv
 }
