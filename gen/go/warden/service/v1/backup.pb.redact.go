@@ -69,6 +69,8 @@ func (x *ExportBackupRequest) Redact() string {
 	}
 
 	// Safe field: TenantId
+
+	// Safe field: IncludeSecrets
 	return x.String()
 }
 

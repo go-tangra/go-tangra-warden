@@ -70,10 +70,11 @@ func (RestoreMode) EnumDescriptor() ([]byte, []int) {
 }
 
 type ExportBackupRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      *uint32                `protobuf:"varint,1,opt,name=tenant_id,json=tenantId,proto3,oneof" json:"tenant_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TenantId       *uint32                `protobuf:"varint,1,opt,name=tenant_id,json=tenantId,proto3,oneof" json:"tenant_id,omitempty"`
+	IncludeSecrets bool                   `protobuf:"varint,2,opt,name=include_secrets,json=includeSecrets,proto3" json:"include_secrets,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ExportBackupRequest) Reset() {
@@ -111,6 +112,13 @@ func (x *ExportBackupRequest) GetTenantId() uint32 {
 		return *x.TenantId
 	}
 	return 0
+}
+
+func (x *ExportBackupRequest) GetIncludeSecrets() bool {
+	if x != nil {
+		return x.IncludeSecrets
+	}
+	return false
 }
 
 type ExportBackupResponse struct {
@@ -397,9 +405,10 @@ var File_warden_service_v1_backup_proto protoreflect.FileDescriptor
 
 const file_warden_service_v1_backup_proto_rawDesc = "" +
 	"\n" +
-	"\x1ewarden/service/v1/backup.proto\x12\x11warden.service.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"E\n" +
+	"\x1ewarden/service/v1/backup.proto\x12\x11warden.service.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"n\n" +
 	"\x13ExportBackupRequest\x12 \n" +
-	"\ttenant_id\x18\x01 \x01(\rH\x00R\btenantId\x88\x01\x01B\f\n" +
+	"\ttenant_id\x18\x01 \x01(\rH\x00R\btenantId\x88\x01\x01\x12'\n" +
+	"\x0finclude_secrets\x18\x02 \x01(\bR\x0eincludeSecretsB\f\n" +
 	"\n" +
 	"_tenant_id\"\xd7\x02\n" +
 	"\x14ExportBackupResponse\x12\x12\n" +

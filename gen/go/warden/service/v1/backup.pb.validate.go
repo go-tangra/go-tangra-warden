@@ -57,6 +57,8 @@ func (m *ExportBackupRequest) validate(all bool) error {
 
 	var errors []error
 
+	// no validation rules for IncludeSecrets
+
 	if m.TenantId != nil {
 		// no validation rules for TenantId
 	}

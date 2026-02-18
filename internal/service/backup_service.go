@@ -20,6 +20,7 @@ import (
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
+	"github.com/go-tangra/go-tangra-warden/pkg/vault"
 )
 
 const (
@@ -27,21 +28,21 @@ const (
 	backupVersion = "1.0"
 )
 
-// BackupService exports and imports Warden DB metadata.
-//
-// IMPORTANT: This exports DB metadata only - actual secret values live in Vault,
-// not exported here. Vault must be backed up separately.
+// BackupService exports and imports Warden data including DB metadata and
+// optionally Vault passwords.
 type BackupService struct {
 	wardenV1.UnimplementedBackupServiceServer
 
 	log       *log.Helper
 	entClient *entCrud.EntClient[*ent.Client]
+	kvStore   *vault.KVStore
 }
 
-func NewBackupService(ctx *bootstrap.Context, entClient *entCrud.EntClient[*ent.Client]) *BackupService {
+func NewBackupService(ctx *bootstrap.Context, entClient *entCrud.EntClient[*ent.Client], kvStore *vault.KVStore) *BackupService {
 	return &BackupService{
 		log:       ctx.NewLoggerHelper("warden/service/backup"),
 		entClient: entClient,
+		kvStore:   kvStore,
 	}
 }
 
@@ -55,10 +56,11 @@ type backupData struct {
 }
 
 type backupEntities struct {
-	Folders        []json.RawMessage `json:"folders,omitempty"`
-	Secrets        []json.RawMessage `json:"secrets,omitempty"`
-	SecretVersions []json.RawMessage `json:"secretVersions,omitempty"`
-	Permissions    []json.RawMessage `json:"permissions,omitempty"`
+	Folders         []json.RawMessage `json:"folders,omitempty"`
+	Secrets         []json.RawMessage `json:"secrets,omitempty"`
+	SecretVersions  []json.RawMessage `json:"secretVersions,omitempty"`
+	Permissions     []json.RawMessage `json:"permissions,omitempty"`
+	SecretPasswords map[string]string `json:"secretPasswords,omitempty"` // secretID -> password
 }
 
 func marshalEntities[T any](entities []*T) ([]json.RawMessage, error) {
@@ -138,6 +140,14 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 		return nil, fmt.Errorf("export permissions: %w", err)
 	}
 
+	var secretPasswords map[string]string
+	if req.GetIncludeSecrets() {
+		secretPasswords, err = s.exportSecretPasswords(ctx, client, tenantID, full)
+		if err != nil {
+			return nil, fmt.Errorf("export secret passwords: %w", err)
+		}
+	}
+
 	backup := backupData{
 		Module:     backupModule,
 		Version:    backupVersion,
@@ -145,10 +155,11 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 		TenantID:   tenantID,
 		FullBackup: full,
 		Data: backupEntities{
-			Folders:        folders,
-			Secrets:        secrets,
-			SecretVersions: secretVersions,
-			Permissions:    permissions,
+			Folders:         folders,
+			Secrets:         secrets,
+			SecretVersions:  secretVersions,
+			Permissions:     permissions,
+			SecretPasswords: secretPasswords,
 		},
 	}
 
@@ -158,10 +169,11 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 	}
 
 	entityCounts := map[string]int64{
-		"folders":        int64(len(folders)),
-		"secrets":        int64(len(secrets)),
-		"secretVersions": int64(len(secretVersions)),
-		"permissions":    int64(len(permissions)),
+		"folders":         int64(len(folders)),
+		"secrets":         int64(len(secrets)),
+		"secretVersions":  int64(len(secretVersions)),
+		"permissions":     int64(len(permissions)),
+		"secretPasswords": int64(len(secretPasswords)),
 	}
 
 	s.log.Infof("exported backup: module=%s tenant=%d full=%v entities=%v", backupModule, tenantID, full, entityCounts)
@@ -209,30 +221,32 @@ func (s *BackupService) ImportBackup(ctx context.Context, req *wardenV1.ImportBa
 	var results []*wardenV1.EntityImportResult
 	var warnings []string
 
-	// Import in FK dependency order
-	importFuncs := []struct {
-		name string
-		fn   func(ctx context.Context, client *ent.Client, items []json.RawMessage, tenantID uint32, full bool, mode wardenV1.RestoreMode) (*wardenV1.EntityImportResult, []string)
-	}{
-		{"folders", s.importFolders},
-		{"secrets", s.importSecrets},
-		{"secretVersions", s.importSecretVersions},
-		{"permissions", s.importPermissions},
-	}
+	// Import in FK dependency order: folders -> secrets -> secretVersions -> permissions
 
-	dataMap := map[string][]json.RawMessage{
-		"folders":        backup.Data.Folders,
-		"secrets":        backup.Data.Secrets,
-		"secretVersions": backup.Data.SecretVersions,
-		"permissions":    backup.Data.Permissions,
-	}
-
-	for _, imp := range importFuncs {
-		items := dataMap[imp.name]
-		if len(items) == 0 {
-			continue
+	if len(backup.Data.Folders) > 0 {
+		result, w := s.importFolders(ctx, client, backup.Data.Folders, tenantID, backup.FullBackup, mode)
+		if result != nil {
+			results = append(results, result)
 		}
-		result, w := imp.fn(ctx, client, items, tenantID, backup.FullBackup, mode)
+		warnings = append(warnings, w...)
+	}
+
+	if len(backup.Data.Secrets) > 0 {
+		secretResults, w := s.importSecrets(ctx, client, backup.Data.Secrets, backup.Data.SecretPasswords, tenantID, backup.FullBackup, mode)
+		results = append(results, secretResults...)
+		warnings = append(warnings, w...)
+	}
+
+	if len(backup.Data.SecretVersions) > 0 {
+		result, w := s.importSecretVersions(ctx, client, backup.Data.SecretVersions, tenantID, backup.FullBackup, mode)
+		if result != nil {
+			results = append(results, result)
+		}
+		warnings = append(warnings, w...)
+	}
+
+	if len(backup.Data.Permissions) > 0 {
+		result, w := s.importPermissions(ctx, client, backup.Data.Permissions, tenantID, backup.FullBackup, mode)
 		if result != nil {
 			results = append(results, result)
 		}
@@ -297,6 +311,28 @@ func (s *BackupService) exportPermissions(ctx context.Context, client *ent.Clien
 		return nil, err
 	}
 	return marshalEntities(entities)
+}
+
+func (s *BackupService) exportSecretPasswords(ctx context.Context, client *ent.Client, tenantID uint32, full bool) (map[string]string, error) {
+	query := client.Secret.Query()
+	if !full {
+		query = query.Where(secret.TenantID(tenantID))
+	}
+	secrets, err := query.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	passwords := make(map[string]string, len(secrets))
+	for _, sec := range secrets {
+		pw, _, err := s.kvStore.GetPassword(ctx, sec.VaultPath)
+		if err != nil {
+			s.log.Warnf("failed to get password for secret %s: %v", sec.ID, err)
+			continue
+		}
+		passwords[sec.ID] = pw
+	}
+	return passwords, nil
 }
 
 // --- Import helpers ---
@@ -377,8 +413,9 @@ func (s *BackupService) importFolders(ctx context.Context, client *ent.Client, i
 	return result, warnings
 }
 
-func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, items []json.RawMessage, tenantID uint32, full bool, mode wardenV1.RestoreMode) (*wardenV1.EntityImportResult, []string) {
+func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, items []json.RawMessage, secretPasswords map[string]string, tenantID uint32, full bool, mode wardenV1.RestoreMode) ([]*wardenV1.EntityImportResult, []string) {
 	result := &wardenV1.EntityImportResult{EntityType: "secrets", Total: int64(len(items))}
+	pwResult := &wardenV1.EntityImportResult{EntityType: "secretPasswords"}
 	var warnings []string
 
 	for _, raw := range items {
@@ -443,9 +480,25 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 			}
 			result.Created++
 		}
+
+		// Restore password to Vault if included in backup
+		if pw, ok := secretPasswords[e.ID]; ok && pw != "" {
+			pwResult.Total++
+			_, err := s.kvStore.StorePassword(ctx, e.VaultPath, pw, nil)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("secretPasswords: store %s: %v", e.ID, err))
+				pwResult.Failed++
+			} else {
+				pwResult.Created++
+			}
+		}
 	}
 
-	return result, warnings
+	importResults := []*wardenV1.EntityImportResult{result}
+	if pwResult.Total > 0 {
+		importResults = append(importResults, pwResult)
+	}
+	return importResults, warnings
 }
 
 func (s *BackupService) importSecretVersions(ctx context.Context, client *ent.Client, items []json.RawMessage, tenantID uint32, full bool, mode wardenV1.RestoreMode) (*wardenV1.EntityImportResult, []string) {

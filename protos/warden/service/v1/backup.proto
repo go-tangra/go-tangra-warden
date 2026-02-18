@@ -12,6 +12,7 @@ enum RestoreMode {
 
 message ExportBackupRequest {
   optional uint32 tenant_id = 1 [json_name = "tenantId"];
+  bool include_secrets = 2 [json_name = "includeSecrets"];
 }
 
 message ExportBackupResponse {
