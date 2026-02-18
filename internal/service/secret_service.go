@@ -103,6 +103,23 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 		}
 	}
 
+	// Grant initial permissions from request
+	for _, perm := range req.InitialPermissions {
+		if perm.SubjectId == "" || perm.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_UNSPECIFIED {
+			continue
+		}
+		// Skip if same as creator (already OWNER)
+		if perm.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_USER && perm.SubjectId == userID {
+			continue
+		}
+		relation := string(mapProtoRelationToAuthz(perm.Relation))
+		subjectType := string(mapProtoSubjectTypeToAuthz(perm.SubjectType))
+		_, err = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secretEntity.ID, relation, subjectType, perm.SubjectId, createdBy, nil)
+		if err != nil {
+			s.log.Warnf("failed to grant initial permission to %s/%s: %v", perm.SubjectType, perm.SubjectId, err)
+		}
+	}
+
 	return &wardenV1.CreateSecretResponse{
 		Secret: s.secretRepo.ToProto(secretEntity),
 	}, nil
