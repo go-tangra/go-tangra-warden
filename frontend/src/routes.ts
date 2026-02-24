@@ -4,7 +4,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/warden',
     name: 'Warden',
-    component: () => import('shell/vben/layouts').then((m) => m.BasicLayout),
+    component: () => import('shell/app-layout'),
     redirect: '/warden/folder',
     meta: {
       order: 2010,
