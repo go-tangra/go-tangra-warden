@@ -1,3 +1,4 @@
+import './styles/tailwind.css';
 import type { TangraModule } from './sdk';
 import routes from './routes';
 import { useWardenFolderStore } from './stores/warden-folder.state';
