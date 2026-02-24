@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
+	kratosHttp "github.com/go-kratos/kratos/v2/transport/http"
 
 	conf "github.com/tx7do/kratos-bootstrap/api/gen/go/conf/v1"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
@@ -31,6 +32,7 @@ var globalRegHelper *registration.RegistrationHelper
 func newApp(
 	ctx *bootstrap.Context,
 	gs *grpc.Server,
+	hs *kratosHttp.Server,
 ) *kratos.App {
 	globalRegHelper = registration.StartRegistration(ctx, ctx.GetLogger(), &registration.Config{
 		ModuleID:          moduleID,
@@ -39,6 +41,8 @@ func newApp(
 		Description:       description,
 		GRPCEndpoint:      registration.GetGRPCAdvertiseAddr(ctx, "0.0.0.0:9300"),
 		AdminEndpoint:     registration.GetEnvOrDefault("ADMIN_GRPC_ENDPOINT", ""),
+		FrontendEntryUrl:  registration.GetEnvOrDefault("FRONTEND_ENTRY_URL", ""),
+		HttpEndpoint:      registration.GetEnvOrDefault("HTTP_ADVERTISE_ADDR", ""),
 		OpenapiSpec:       assets.OpenApiData,
 		ProtoDescriptor:   assets.DescriptorData,
 		MenusYaml:         assets.MenusData,
@@ -47,7 +51,7 @@ func newApp(
 		MaxRetries:        60,
 	})
 
-	return bootstrap.NewApp(ctx, gs)
+	return bootstrap.NewApp(ctx, gs, hs)
 }
 
 func runApp() error {

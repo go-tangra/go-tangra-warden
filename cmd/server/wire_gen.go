@@ -51,7 +51,8 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker)
 	backupService := service.NewBackupService(context, entClient, kvStore)
 	grpcServer := server.NewGRPCServer(context, certManager, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService)
-	app := newApp(context, grpcServer)
+	httpServer := server.NewHTTPServer(context)
+	app := newApp(context, grpcServer, httpServer)
 	return app, func() {
 		cleanup2()
 		cleanup()
