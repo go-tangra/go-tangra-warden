@@ -339,10 +339,10 @@ defineExpose({
       <div v-else class="space-y-4">
         <!-- File Name -->
         <div class="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-          <LucideFile class="size-5 text-blue-500" />
+          <LucideFile class="size-5" style="color: #3b82f6" />
           <span class="font-medium">{{ fileName }}</span>
           <button
-            class="ml-auto text-gray-400 hover:text-red-500"
+            class="ml-auto file-remove-btn"
             @click="resetState"
           >
             <LucideXCircle class="size-4" />
@@ -571,3 +571,12 @@ defineExpose({
     </div>
   </ModalComponent>
 </template>
+
+<style scoped>
+.file-remove-btn {
+  color: #9ca3af;
+}
+.file-remove-btn:hover {
+  color: #ef4444;
+}
+</style>
