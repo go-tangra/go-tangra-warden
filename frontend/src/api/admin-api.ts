@@ -21,9 +21,9 @@ export async function listUsers(
   if (query && Object.keys(query).length > 0) {
     params.set('query', JSON.stringify(query));
   }
-  return adminGet(`/admin/v1/users?${params}`);
+  return adminGet(`/admin/admin/v1/users?${params}`);
 }
 
 export async function listRoles(): Promise<{ items: any[] }> {
-  return adminGet('/admin/v1/roles?noPaging=true');
+  return adminGet('/admin/admin/v1/roles?noPaging=true');
 }
