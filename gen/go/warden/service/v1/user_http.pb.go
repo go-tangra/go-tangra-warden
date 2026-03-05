@@ -19,15 +19,18 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationWardenUserServiceListRoles = "/warden.service.v1.WardenUserService/ListRoles"
 const OperationWardenUserServiceListUsers = "/warden.service.v1.WardenUserService/ListUsers"
 
 type WardenUserServiceHTTPServer interface {
+	ListRoles(context.Context, *ListWardenRolesRequest) (*ListWardenRolesResponse, error)
 	ListUsers(context.Context, *ListWardenUsersRequest) (*ListWardenUsersResponse, error)
 }
 
 func RegisterWardenUserServiceHTTPServer(s *http.Server, srv WardenUserServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/users", _WardenUserService_ListUsers0_HTTP_Handler(srv))
+	r.GET("/v1/roles", _WardenUserService_ListRoles0_HTTP_Handler(srv))
 }
 
 func _WardenUserService_ListUsers0_HTTP_Handler(srv WardenUserServiceHTTPServer) func(ctx http.Context) error {
@@ -49,7 +52,27 @@ func _WardenUserService_ListUsers0_HTTP_Handler(srv WardenUserServiceHTTPServer)
 	}
 }
 
+func _WardenUserService_ListRoles0_HTTP_Handler(srv WardenUserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListWardenRolesRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationWardenUserServiceListRoles)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListRoles(ctx, req.(*ListWardenRolesRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListWardenRolesResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type WardenUserServiceHTTPClient interface {
+	ListRoles(ctx context.Context, req *ListWardenRolesRequest, opts ...http.CallOption) (rsp *ListWardenRolesResponse, err error)
 	ListUsers(ctx context.Context, req *ListWardenUsersRequest, opts ...http.CallOption) (rsp *ListWardenUsersResponse, err error)
 }
 
@@ -59,6 +82,19 @@ type WardenUserServiceHTTPClientImpl struct {
 
 func NewWardenUserServiceHTTPClient(client *http.Client) WardenUserServiceHTTPClient {
 	return &WardenUserServiceHTTPClientImpl{client}
+}
+
+func (c *WardenUserServiceHTTPClientImpl) ListRoles(ctx context.Context, in *ListWardenRolesRequest, opts ...http.CallOption) (*ListWardenRolesResponse, error) {
+	var out ListWardenRolesResponse
+	pattern := "/v1/roles"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationWardenUserServiceListRoles))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *WardenUserServiceHTTPClientImpl) ListUsers(ctx context.Context, in *ListWardenUsersRequest, opts ...http.CallOption) (*ListWardenUsersResponse, error) {

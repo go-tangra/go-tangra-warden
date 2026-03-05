@@ -203,6 +203,171 @@ func (x *ListWardenUsersResponse) GetTotal() int32 {
 	return 0
 }
 
+// Lightweight role representation for warden module dropdowns
+type WardenRole struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Code          string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WardenRole) Reset() {
+	*x = WardenRole{}
+	mi := &file_warden_service_v1_user_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WardenRole) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WardenRole) ProtoMessage() {}
+
+func (x *WardenRole) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_user_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WardenRole.ProtoReflect.Descriptor instead.
+func (*WardenRole) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_user_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WardenRole) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *WardenRole) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *WardenRole) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *WardenRole) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type ListWardenRolesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NoPaging      *bool                  `protobuf:"varint,1,opt,name=no_paging,json=noPaging,proto3,oneof" json:"no_paging,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListWardenRolesRequest) Reset() {
+	*x = ListWardenRolesRequest{}
+	mi := &file_warden_service_v1_user_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListWardenRolesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListWardenRolesRequest) ProtoMessage() {}
+
+func (x *ListWardenRolesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_user_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListWardenRolesRequest.ProtoReflect.Descriptor instead.
+func (*ListWardenRolesRequest) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_user_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListWardenRolesRequest) GetNoPaging() bool {
+	if x != nil && x.NoPaging != nil {
+		return *x.NoPaging
+	}
+	return false
+}
+
+type ListWardenRolesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*WardenRole          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListWardenRolesResponse) Reset() {
+	*x = ListWardenRolesResponse{}
+	mi := &file_warden_service_v1_user_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListWardenRolesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListWardenRolesResponse) ProtoMessage() {}
+
+func (x *ListWardenRolesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_user_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListWardenRolesResponse.ProtoReflect.Descriptor instead.
+func (*ListWardenRolesResponse) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_user_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListWardenRolesResponse) GetItems() []*WardenRole {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListWardenRolesResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 var File_warden_service_v1_user_proto protoreflect.FileDescriptor
 
 const file_warden_service_v1_user_proto_rawDesc = "" +
@@ -222,9 +387,23 @@ const file_warden_service_v1_user_proto_rawDesc = "" +
 	"_no_paging\"d\n" +
 	"\x17ListWardenUsersResponse\x123\n" +
 	"\x05items\x18\x01 \x03(\v2\x1d.warden.service.v1.WardenUserR\x05items\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total2\x8a\x01\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"f\n" +
+	"\n" +
+	"WardenRole\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04code\x18\x03 \x01(\tR\x04code\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\"H\n" +
+	"\x16ListWardenRolesRequest\x12 \n" +
+	"\tno_paging\x18\x01 \x01(\bH\x00R\bnoPaging\x88\x01\x01B\f\n" +
+	"\n" +
+	"_no_paging\"d\n" +
+	"\x17ListWardenRolesResponse\x123\n" +
+	"\x05items\x18\x01 \x03(\v2\x1d.warden.service.v1.WardenRoleR\x05items\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total2\x81\x02\n" +
 	"\x11WardenUserService\x12u\n" +
-	"\tListUsers\x12).warden.service.v1.ListWardenUsersRequest\x1a*.warden.service.v1.ListWardenUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/usersB\xd1\x01\n" +
+	"\tListUsers\x12).warden.service.v1.ListWardenUsersRequest\x1a*.warden.service.v1.ListWardenUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/users\x12u\n" +
+	"\tListRoles\x12).warden.service.v1.ListWardenRolesRequest\x1a*.warden.service.v1.ListWardenRolesResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/rolesB\xd1\x01\n" +
 	"\x15com.warden.service.v1B\tUserProtoP\x01ZGgithub.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1;wardenpb\xa2\x02\x03WSX\xaa\x02\x11Warden.Service.V1\xca\x02\x11Warden\\Service\\V1\xe2\x02\x1dWarden\\Service\\V1\\GPBMetadata\xea\x02\x13Warden::Service::V1b\x06proto3"
 
 var (
@@ -239,21 +418,27 @@ func file_warden_service_v1_user_proto_rawDescGZIP() []byte {
 	return file_warden_service_v1_user_proto_rawDescData
 }
 
-var file_warden_service_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_warden_service_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_warden_service_v1_user_proto_goTypes = []any{
 	(*WardenUser)(nil),              // 0: warden.service.v1.WardenUser
 	(*ListWardenUsersRequest)(nil),  // 1: warden.service.v1.ListWardenUsersRequest
 	(*ListWardenUsersResponse)(nil), // 2: warden.service.v1.ListWardenUsersResponse
+	(*WardenRole)(nil),              // 3: warden.service.v1.WardenRole
+	(*ListWardenRolesRequest)(nil),  // 4: warden.service.v1.ListWardenRolesRequest
+	(*ListWardenRolesResponse)(nil), // 5: warden.service.v1.ListWardenRolesResponse
 }
 var file_warden_service_v1_user_proto_depIdxs = []int32{
 	0, // 0: warden.service.v1.ListWardenUsersResponse.items:type_name -> warden.service.v1.WardenUser
-	1, // 1: warden.service.v1.WardenUserService.ListUsers:input_type -> warden.service.v1.ListWardenUsersRequest
-	2, // 2: warden.service.v1.WardenUserService.ListUsers:output_type -> warden.service.v1.ListWardenUsersResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 1: warden.service.v1.ListWardenRolesResponse.items:type_name -> warden.service.v1.WardenRole
+	1, // 2: warden.service.v1.WardenUserService.ListUsers:input_type -> warden.service.v1.ListWardenUsersRequest
+	4, // 3: warden.service.v1.WardenUserService.ListRoles:input_type -> warden.service.v1.ListWardenRolesRequest
+	2, // 4: warden.service.v1.WardenUserService.ListUsers:output_type -> warden.service.v1.ListWardenUsersResponse
+	5, // 5: warden.service.v1.WardenUserService.ListRoles:output_type -> warden.service.v1.ListWardenRolesResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_warden_service_v1_user_proto_init() }
@@ -262,13 +447,14 @@ func file_warden_service_v1_user_proto_init() {
 		return
 	}
 	file_warden_service_v1_user_proto_msgTypes[1].OneofWrappers = []any{}
+	file_warden_service_v1_user_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_warden_service_v1_user_proto_rawDesc), len(file_warden_service_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

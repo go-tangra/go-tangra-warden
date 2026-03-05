@@ -20,15 +20,17 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	WardenUserService_ListUsers_FullMethodName = "/warden.service.v1.WardenUserService/ListUsers"
+	WardenUserService_ListRoles_FullMethodName = "/warden.service.v1.WardenUserService/ListRoles"
 )
 
 // WardenUserServiceClient is the client API for WardenUserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// WardenUserService provides user listing for warden module
+// WardenUserService provides user and role listing for warden module
 type WardenUserServiceClient interface {
 	ListUsers(ctx context.Context, in *ListWardenUsersRequest, opts ...grpc.CallOption) (*ListWardenUsersResponse, error)
+	ListRoles(ctx context.Context, in *ListWardenRolesRequest, opts ...grpc.CallOption) (*ListWardenRolesResponse, error)
 }
 
 type wardenUserServiceClient struct {
@@ -49,13 +51,24 @@ func (c *wardenUserServiceClient) ListUsers(ctx context.Context, in *ListWardenU
 	return out, nil
 }
 
+func (c *wardenUserServiceClient) ListRoles(ctx context.Context, in *ListWardenRolesRequest, opts ...grpc.CallOption) (*ListWardenRolesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWardenRolesResponse)
+	err := c.cc.Invoke(ctx, WardenUserService_ListRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WardenUserServiceServer is the server API for WardenUserService service.
 // All implementations must embed UnimplementedWardenUserServiceServer
 // for forward compatibility.
 //
-// WardenUserService provides user listing for warden module
+// WardenUserService provides user and role listing for warden module
 type WardenUserServiceServer interface {
 	ListUsers(context.Context, *ListWardenUsersRequest) (*ListWardenUsersResponse, error)
+	ListRoles(context.Context, *ListWardenRolesRequest) (*ListWardenRolesResponse, error)
 	mustEmbedUnimplementedWardenUserServiceServer()
 }
 
@@ -68,6 +81,9 @@ type UnimplementedWardenUserServiceServer struct{}
 
 func (UnimplementedWardenUserServiceServer) ListUsers(context.Context, *ListWardenUsersRequest) (*ListWardenUsersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListUsers not implemented")
+}
+func (UnimplementedWardenUserServiceServer) ListRoles(context.Context, *ListWardenRolesRequest) (*ListWardenRolesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoles not implemented")
 }
 func (UnimplementedWardenUserServiceServer) mustEmbedUnimplementedWardenUserServiceServer() {}
 func (UnimplementedWardenUserServiceServer) testEmbeddedByValue()                           {}
@@ -108,6 +124,24 @@ func _WardenUserService_ListUsers_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WardenUserService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWardenRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WardenUserServiceServer).ListRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WardenUserService_ListRoles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WardenUserServiceServer).ListRoles(ctx, req.(*ListWardenRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WardenUserService_ServiceDesc is the grpc.ServiceDesc for WardenUserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +152,10 @@ var WardenUserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListUsers",
 			Handler:    _WardenUserService_ListUsers_Handler,
+		},
+		{
+			MethodName: "ListRoles",
+			Handler:    _WardenUserService_ListRoles_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

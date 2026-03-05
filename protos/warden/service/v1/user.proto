@@ -23,11 +23,34 @@ message ListWardenUsersResponse {
   int32 total = 2 [json_name = "total"];
 }
 
-// WardenUserService provides user listing for warden module
+// Lightweight role representation for warden module dropdowns
+message WardenRole {
+  uint32 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  string code = 3 [json_name = "code"];
+  string description = 4 [json_name = "description"];
+}
+
+message ListWardenRolesRequest {
+  optional bool no_paging = 1 [json_name = "noPaging"];
+}
+
+message ListWardenRolesResponse {
+  repeated WardenRole items = 1 [json_name = "items"];
+  int32 total = 2 [json_name = "total"];
+}
+
+// WardenUserService provides user and role listing for warden module
 service WardenUserService {
   rpc ListUsers(ListWardenUsersRequest) returns (ListWardenUsersResponse) {
     option (google.api.http) = {
       get: "/v1/users"
+    };
+  }
+
+  rpc ListRoles(ListWardenRolesRequest) returns (ListWardenRolesResponse) {
+    option (google.api.http) = {
+      get: "/v1/roles"
     };
   }
 }

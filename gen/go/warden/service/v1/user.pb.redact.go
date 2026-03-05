@@ -49,6 +49,17 @@ func (s *redactedWardenUserServiceServer) ListUsers(ctx context.Context, in *Lis
 	return res, err
 }
 
+// ListRoles is the redacted wrapper for the actual WardenUserServiceServer.ListRoles method
+// Unary RPC
+func (s *redactedWardenUserServiceServer) ListRoles(ctx context.Context, in *ListWardenRolesRequest) (*ListWardenRolesResponse, error) {
+	res, err := s.srv.ListRoles(ctx, in)
+	if !s.bypass.CheckInternal(ctx) {
+		// Apply redaction to the response
+		redact.Apply(res)
+	}
+	return res, err
+}
+
 // Redact method implementation for WardenUser
 func (x *WardenUser) Redact() string {
 	if x == nil {
@@ -81,6 +92,44 @@ func (x *ListWardenUsersRequest) Redact() string {
 
 // Redact method implementation for ListWardenUsersResponse
 func (x *ListWardenUsersResponse) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Items
+
+	// Safe field: Total
+	return x.String()
+}
+
+// Redact method implementation for WardenRole
+func (x *WardenRole) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Id
+
+	// Safe field: Name
+
+	// Safe field: Code
+
+	// Safe field: Description
+	return x.String()
+}
+
+// Redact method implementation for ListWardenRolesRequest
+func (x *ListWardenRolesRequest) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: NoPaging
+	return x.String()
+}
+
+// Redact method implementation for ListWardenRolesResponse
+func (x *ListWardenRolesResponse) Redact() string {
 	if x == nil {
 		return ""
 	}

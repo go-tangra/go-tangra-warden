@@ -9,11 +9,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	adminstubpb "github.com/go-tangra/go-tangra-warden/gen/go/warden_admin_stub/v1"
+	adminstubpb "github.com/go-tangra/go-tangra-common/gen/go/common/admin_stub/v1"
 	paginationV1 "github.com/tx7do/go-crud/api/gen/go/pagination/v1"
 )
 
-// AdminClient calls the admin-service gRPC API for user listing
+// AdminClient calls the admin-service gRPC API for user and role listing
 type AdminClient struct {
 	log  *log.Helper
 	conn *grpc.ClientConn
@@ -59,6 +59,21 @@ func (c *AdminClient) ListUsers(ctx context.Context) (*adminstubpb.ListAdminUser
 	err := c.conn.Invoke(ctx, "/admin.service.v1.UserService/List", req, resp)
 	if err != nil {
 		c.log.Errorf("Failed to list users from admin-service: %v", err)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// ListRoles calls admin.service.v1.RoleService/List via gRPC
+func (c *AdminClient) ListRoles(ctx context.Context) (*adminstubpb.ListAdminRolesResponse, error) {
+	noPaging := true
+	req := &paginationV1.PagingRequest{NoPaging: &noPaging}
+
+	resp := &adminstubpb.ListAdminRolesResponse{}
+	err := c.conn.Invoke(ctx, "/admin.service.v1.RoleService/List", req, resp)
+	if err != nil {
+		c.log.Errorf("Failed to list roles from admin-service: %v", err)
 		return nil, err
 	}
 

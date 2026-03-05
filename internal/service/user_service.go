@@ -48,3 +48,26 @@ func (s *UserService) ListUsers(ctx context.Context, req *wardenV1.ListWardenUse
 		Total: int32(len(items)),
 	}, nil
 }
+
+func (s *UserService) ListRoles(ctx context.Context, req *wardenV1.ListWardenRolesRequest) (*wardenV1.ListWardenRolesResponse, error) {
+	resp, err := s.adminClient.ListRoles(ctx)
+	if err != nil {
+		s.log.Errorf("Failed to list roles from admin-service: %v", err)
+		return nil, err
+	}
+
+	items := make([]*wardenV1.WardenRole, 0, len(resp.Items))
+	for _, r := range resp.Items {
+		items = append(items, &wardenV1.WardenRole{
+			Id:          r.Id,
+			Name:        r.Name,
+			Code:        r.Code,
+			Description: r.Description,
+		})
+	}
+
+	return &wardenV1.ListWardenRolesResponse{
+		Items: items,
+		Total: int32(len(items)),
+	}, nil
+}

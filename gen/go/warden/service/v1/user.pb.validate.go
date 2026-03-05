@@ -385,3 +385,354 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ListWardenUsersResponseValidationError{}
+
+// Validate checks the field values on WardenRole with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *WardenRole) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on WardenRole with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in WardenRoleMultiError, or
+// nil if none found.
+func (m *WardenRole) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *WardenRole) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for Name
+
+	// no validation rules for Code
+
+	// no validation rules for Description
+
+	if len(errors) > 0 {
+		return WardenRoleMultiError(errors)
+	}
+
+	return nil
+}
+
+// WardenRoleMultiError is an error wrapping multiple validation errors
+// returned by WardenRole.ValidateAll() if the designated constraints aren't met.
+type WardenRoleMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m WardenRoleMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m WardenRoleMultiError) AllErrors() []error { return m }
+
+// WardenRoleValidationError is the validation error returned by
+// WardenRole.Validate if the designated constraints aren't met.
+type WardenRoleValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e WardenRoleValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e WardenRoleValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e WardenRoleValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e WardenRoleValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e WardenRoleValidationError) ErrorName() string { return "WardenRoleValidationError" }
+
+// Error satisfies the builtin error interface
+func (e WardenRoleValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sWardenRole.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = WardenRoleValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = WardenRoleValidationError{}
+
+// Validate checks the field values on ListWardenRolesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListWardenRolesRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListWardenRolesRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListWardenRolesRequestMultiError, or nil if none found.
+func (m *ListWardenRolesRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListWardenRolesRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.NoPaging != nil {
+		// no validation rules for NoPaging
+	}
+
+	if len(errors) > 0 {
+		return ListWardenRolesRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListWardenRolesRequestMultiError is an error wrapping multiple validation
+// errors returned by ListWardenRolesRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListWardenRolesRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListWardenRolesRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListWardenRolesRequestMultiError) AllErrors() []error { return m }
+
+// ListWardenRolesRequestValidationError is the validation error returned by
+// ListWardenRolesRequest.Validate if the designated constraints aren't met.
+type ListWardenRolesRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListWardenRolesRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListWardenRolesRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListWardenRolesRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListWardenRolesRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListWardenRolesRequestValidationError) ErrorName() string {
+	return "ListWardenRolesRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListWardenRolesRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListWardenRolesRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListWardenRolesRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListWardenRolesRequestValidationError{}
+
+// Validate checks the field values on ListWardenRolesResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListWardenRolesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListWardenRolesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListWardenRolesResponseMultiError, or nil if none found.
+func (m *ListWardenRolesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListWardenRolesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetItems() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListWardenRolesResponseValidationError{
+						field:  fmt.Sprintf("Items[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListWardenRolesResponseValidationError{
+						field:  fmt.Sprintf("Items[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListWardenRolesResponseValidationError{
+					field:  fmt.Sprintf("Items[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Total
+
+	if len(errors) > 0 {
+		return ListWardenRolesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListWardenRolesResponseMultiError is an error wrapping multiple validation
+// errors returned by ListWardenRolesResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListWardenRolesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListWardenRolesResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListWardenRolesResponseMultiError) AllErrors() []error { return m }
+
+// ListWardenRolesResponseValidationError is the validation error returned by
+// ListWardenRolesResponse.Validate if the designated constraints aren't met.
+type ListWardenRolesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListWardenRolesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListWardenRolesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListWardenRolesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListWardenRolesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListWardenRolesResponseValidationError) ErrorName() string {
+	return "ListWardenRolesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListWardenRolesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListWardenRolesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListWardenRolesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListWardenRolesResponseValidationError{}
