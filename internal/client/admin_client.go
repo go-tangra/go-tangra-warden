@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	adminstubpb "github.com/go-tangra/go-tangra-warden/gen/go/admin_stub/v1"
+	adminstubpb "github.com/go-tangra/go-tangra-warden/gen/go/warden_admin_stub/v1"
 	paginationV1 "github.com/tx7do/go-crud/api/gen/go/pagination/v1"
 )
 

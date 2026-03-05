@@ -6,7 +6,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: admin_stub/v1/user.proto
+// source: warden_admin_stub/v1/user.proto
 
 package adminstubpb
 
@@ -39,7 +39,7 @@ type AdminUser struct {
 
 func (x *AdminUser) Reset() {
 	*x = AdminUser{}
-	mi := &file_admin_stub_v1_user_proto_msgTypes[0]
+	mi := &file_warden_admin_stub_v1_user_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +51,7 @@ func (x *AdminUser) String() string {
 func (*AdminUser) ProtoMessage() {}
 
 func (x *AdminUser) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_stub_v1_user_proto_msgTypes[0]
+	mi := &file_warden_admin_stub_v1_user_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +64,7 @@ func (x *AdminUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminUser.ProtoReflect.Descriptor instead.
 func (*AdminUser) Descriptor() ([]byte, []int) {
-	return file_admin_stub_v1_user_proto_rawDescGZIP(), []int{0}
+	return file_warden_admin_stub_v1_user_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *AdminUser) GetId() uint32 {
@@ -119,7 +119,7 @@ type ListAdminUsersResponse struct {
 
 func (x *ListAdminUsersResponse) Reset() {
 	*x = ListAdminUsersResponse{}
-	mi := &file_admin_stub_v1_user_proto_msgTypes[1]
+	mi := &file_warden_admin_stub_v1_user_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -131,7 +131,7 @@ func (x *ListAdminUsersResponse) String() string {
 func (*ListAdminUsersResponse) ProtoMessage() {}
 
 func (x *ListAdminUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_admin_stub_v1_user_proto_msgTypes[1]
+	mi := &file_warden_admin_stub_v1_user_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,7 +144,7 @@ func (x *ListAdminUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAdminUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListAdminUsersResponse) Descriptor() ([]byte, []int) {
-	return file_admin_stub_v1_user_proto_rawDescGZIP(), []int{1}
+	return file_warden_admin_stub_v1_user_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ListAdminUsersResponse) GetItems() []*AdminUser {
@@ -161,42 +161,42 @@ func (x *ListAdminUsersResponse) GetTotal() int32 {
 	return 0
 }
 
-var File_admin_stub_v1_user_proto protoreflect.FileDescriptor
+var File_warden_admin_stub_v1_user_proto protoreflect.FileDescriptor
 
-const file_admin_stub_v1_user_proto_rawDesc = "" +
+const file_warden_admin_stub_v1_user_proto_rawDesc = "" +
 	"\n" +
-	"\x18admin_stub/v1/user.proto\x12\radmin_stub.v1\"\xb6\x01\n" +
+	"\x1fwarden_admin_stub/v1/user.proto\x12\x14warden_admin_stub.v1\"\xb6\x01\n" +
 	"\tAdminUser\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
 	"\x0eorg_unit_names\x18\a \x03(\tR\forgUnitNames\x12%\n" +
 	"\x0eposition_names\x18\v \x03(\tR\rpositionNames\x12\x1a\n" +
 	"\busername\x18\x14 \x01(\tR\busername\x12\x1a\n" +
 	"\brealname\x18\x16 \x01(\tR\brealname\x12\x14\n" +
-	"\x05email\x18\x18 \x01(\tR\x05email\"^\n" +
-	"\x16ListAdminUsersResponse\x12.\n" +
-	"\x05items\x18\x01 \x03(\v2\x18.admin_stub.v1.AdminUserR\x05items\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05totalB\xb7\x01\n" +
-	"\x11com.admin_stub.v1B\tUserProtoP\x01ZFgithub.com/go-tangra/go-tangra-warden/gen/go/admin_stub/v1;adminstubpb\xa2\x02\x03AXX\xaa\x02\fAdminStub.V1\xca\x02\fAdminStub\\V1\xe2\x02\x18AdminStub\\V1\\GPBMetadata\xea\x02\rAdminStub::V1b\x06proto3"
+	"\x05email\x18\x18 \x01(\tR\x05email\"e\n" +
+	"\x16ListAdminUsersResponse\x125\n" +
+	"\x05items\x18\x01 \x03(\v2\x1f.warden_admin_stub.v1.AdminUserR\x05items\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05totalB\xdd\x01\n" +
+	"\x18com.warden_admin_stub.v1B\tUserProtoP\x01ZMgithub.com/go-tangra/go-tangra-warden/gen/go/warden_admin_stub/v1;adminstubpb\xa2\x02\x03WXX\xaa\x02\x12WardenAdminStub.V1\xca\x02\x12WardenAdminStub\\V1\xe2\x02\x1eWardenAdminStub\\V1\\GPBMetadata\xea\x02\x13WardenAdminStub::V1b\x06proto3"
 
 var (
-	file_admin_stub_v1_user_proto_rawDescOnce sync.Once
-	file_admin_stub_v1_user_proto_rawDescData []byte
+	file_warden_admin_stub_v1_user_proto_rawDescOnce sync.Once
+	file_warden_admin_stub_v1_user_proto_rawDescData []byte
 )
 
-func file_admin_stub_v1_user_proto_rawDescGZIP() []byte {
-	file_admin_stub_v1_user_proto_rawDescOnce.Do(func() {
-		file_admin_stub_v1_user_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_admin_stub_v1_user_proto_rawDesc), len(file_admin_stub_v1_user_proto_rawDesc)))
+func file_warden_admin_stub_v1_user_proto_rawDescGZIP() []byte {
+	file_warden_admin_stub_v1_user_proto_rawDescOnce.Do(func() {
+		file_warden_admin_stub_v1_user_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_warden_admin_stub_v1_user_proto_rawDesc), len(file_warden_admin_stub_v1_user_proto_rawDesc)))
 	})
-	return file_admin_stub_v1_user_proto_rawDescData
+	return file_warden_admin_stub_v1_user_proto_rawDescData
 }
 
-var file_admin_stub_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_admin_stub_v1_user_proto_goTypes = []any{
-	(*AdminUser)(nil),              // 0: admin_stub.v1.AdminUser
-	(*ListAdminUsersResponse)(nil), // 1: admin_stub.v1.ListAdminUsersResponse
+var file_warden_admin_stub_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_warden_admin_stub_v1_user_proto_goTypes = []any{
+	(*AdminUser)(nil),              // 0: warden_admin_stub.v1.AdminUser
+	(*ListAdminUsersResponse)(nil), // 1: warden_admin_stub.v1.ListAdminUsersResponse
 }
-var file_admin_stub_v1_user_proto_depIdxs = []int32{
-	0, // 0: admin_stub.v1.ListAdminUsersResponse.items:type_name -> admin_stub.v1.AdminUser
+var file_warden_admin_stub_v1_user_proto_depIdxs = []int32{
+	0, // 0: warden_admin_stub.v1.ListAdminUsersResponse.items:type_name -> warden_admin_stub.v1.AdminUser
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -204,26 +204,26 @@ var file_admin_stub_v1_user_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_admin_stub_v1_user_proto_init() }
-func file_admin_stub_v1_user_proto_init() {
-	if File_admin_stub_v1_user_proto != nil {
+func init() { file_warden_admin_stub_v1_user_proto_init() }
+func file_warden_admin_stub_v1_user_proto_init() {
+	if File_warden_admin_stub_v1_user_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_admin_stub_v1_user_proto_rawDesc), len(file_admin_stub_v1_user_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_warden_admin_stub_v1_user_proto_rawDesc), len(file_warden_admin_stub_v1_user_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_admin_stub_v1_user_proto_goTypes,
-		DependencyIndexes: file_admin_stub_v1_user_proto_depIdxs,
-		MessageInfos:      file_admin_stub_v1_user_proto_msgTypes,
+		GoTypes:           file_warden_admin_stub_v1_user_proto_goTypes,
+		DependencyIndexes: file_warden_admin_stub_v1_user_proto_depIdxs,
+		MessageInfos:      file_warden_admin_stub_v1_user_proto_msgTypes,
 	}.Build()
-	File_admin_stub_v1_user_proto = out.File
-	file_admin_stub_v1_user_proto_goTypes = nil
-	file_admin_stub_v1_user_proto_depIdxs = nil
+	File_warden_admin_stub_v1_user_proto = out.File
+	file_warden_admin_stub_v1_user_proto_goTypes = nil
+	file_warden_admin_stub_v1_user_proto_depIdxs = nil
 }
