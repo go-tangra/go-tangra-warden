@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { VxeGridProps } from 'shell/adapter/vxe-table';
 
-import { h, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
 import { Page, useVbenDrawer, type VbenFormProps } from 'shell/vben/common-ui';
 import { LucideTrash, LucidePencil, LucideUsers } from 'shell/vben/icons';
@@ -12,10 +12,44 @@ import { useVbenVxeGrid } from 'shell/adapter/vxe-table';
 import { type PermissionTuple } from '../../api/services';
 import { $t } from 'shell/locales';
 import { useWardenPermissionStore } from '../../stores/warden-permission.state';
+import { listUsers, listRoles } from '../../api/admin-api';
 
 import PermissionDrawer from './permission-drawer.vue';
 
 const permissionStore = useWardenPermissionStore();
+
+const users = ref<any[]>([]);
+const roles = ref<any[]>([]);
+
+async function loadSubjects() {
+  try {
+    const [usersResp, rolesResp] = await Promise.all([listUsers(), listRoles()]);
+    users.value = usersResp.items ?? [];
+    roles.value = rolesResp.items ?? [];
+  } catch (e) {
+    console.error('Failed to load subjects:', e);
+  }
+}
+
+function resolveSubjectName(subjectType: string | undefined, subjectId: string | undefined): string {
+  if (!subjectId) return '';
+
+  if (subjectType === 'SUBJECT_TYPE_USER') {
+    const user = users.value.find((u) => String(u.id) === subjectId);
+    if (user) {
+      return `${user.realname || user.username} (${user.username})`;
+    }
+  } else if (subjectType === 'SUBJECT_TYPE_ROLE') {
+    const role = roles.value.find((r) => r.code === subjectId);
+    if (role) {
+      return role.name ?? subjectId;
+    }
+  }
+
+  return subjectId;
+}
+
+onMounted(() => loadSubjects());
 
 const formOptions: VbenFormProps = {
   collapsed: false,
@@ -95,7 +129,8 @@ const gridOptions: VxeGridProps<PermissionTuple> = {
     {
       title: $t('warden.page.permission.subjectId'),
       field: 'subjectId',
-      width: 150,
+      width: 200,
+      slots: { default: 'subjectId' },
     },
     {
       title: $t('warden.page.permission.relation'),
@@ -237,6 +272,9 @@ function getRelationColor(relation: string) {
           <component :is="LucideUsers" class="size-4" />
           <span>{{ getSubjectTypeLabel(row.subjectType) }}</span>
         </div>
+      </template>
+      <template #subjectId="{ row }">
+        {{ resolveSubjectName(row.subjectType, row.subjectId) }}
       </template>
       <template #relation="{ row }">
         <Tag :color="getRelationColor(row.relation)">
