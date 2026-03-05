@@ -598,16 +598,12 @@ const selectedFolderName = computed(() => {
         <Grid :table-title="`${$t('warden.page.secret.title')} - ${selectedFolderName}`">
           <template #toolbar-tools>
             <Space>
-              <Button @click="handleOpenImportModal">
-                <template #icon>
-                  <LucideUpload class="size-4" />
-                </template>
+              <Button :style="{ display: 'inline-flex', alignItems: 'center', gap: '6px' }" @click="handleOpenImportModal">
+                <LucideUpload :size="14" />
                 {{ $t('warden.page.bitwarden.import') }}
               </Button>
-              <Button @click="handleExport">
-                <template #icon>
-                  <LucideDownload class="size-4" />
-                </template>
+              <Button :style="{ display: 'inline-flex', alignItems: 'center', gap: '6px' }" @click="handleExport">
+                <LucideDownload :size="14" />
                 {{ $t('warden.page.bitwarden.export') }}
               </Button>
               <Button type="primary" @click="handleCreateSecret">

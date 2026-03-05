@@ -44,6 +44,7 @@ func NewGRPCServer(
 	systemSvc *service.SystemService,
 	bitwardenTransferSvc *service.BitwardenTransferService,
 	backupSvc *service.BackupService,
+	userSvc *service.UserService,
 ) *grpc.Server {
 	cfg := ctx.GetConfig()
 	l := ctx.NewLoggerHelper("warden/grpc")
@@ -122,6 +123,7 @@ func NewGRPCServer(
 	wardenV1.RegisterRedactedWardenSystemServiceServer(srv, systemSvc, nil)
 	wardenV1.RegisterRedactedWardenBitwardenTransferServiceServer(srv, bitwardenTransferSvc, nil)
 	wardenV1.RegisterRedactedBackupServiceServer(srv, backupSvc, nil)
+	wardenV1.RegisterRedactedWardenUserServiceServer(srv, userSvc, nil)
 
 	return srv
 }

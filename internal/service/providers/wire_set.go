@@ -13,6 +13,7 @@ package providers
 import (
 	"github.com/google/wire"
 
+	"github.com/go-tangra/go-tangra-warden/internal/client"
 	"github.com/go-tangra/go-tangra-warden/internal/service"
 )
 
@@ -24,6 +25,8 @@ var ProviderSet = wire.NewSet(
 	service.NewSystemService,
 	service.NewBitwardenTransferService,
 	service.NewBackupService,
+	service.NewUserService,
+	client.NewAdminClient,
 	ProvideResourceLookup,
 	ProvidePermissionStore,
 	ProvideAuthzEngine,

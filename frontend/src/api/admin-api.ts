@@ -1,5 +1,11 @@
 import { useAccessStore } from 'shell/vben/stores';
 
+import { wardenApi } from './client';
+
+export async function listUsers(): Promise<{ items: any[] }> {
+  return wardenApi.get('/users?noPaging=true');
+}
+
 async function adminGet(path: string): Promise<any> {
   const token = (useAccessStore() as any).accessToken;
   const res = await fetch(path, {
@@ -12,16 +18,6 @@ async function adminGet(path: string): Promise<any> {
     throw new Error(err.message || `HTTP ${res.status}`);
   }
   return res.json();
-}
-
-export async function listUsers(
-  query?: Record<string, string>,
-): Promise<{ items: any[] }> {
-  const params = new URLSearchParams({ noPaging: 'true' });
-  if (query && Object.keys(query).length > 0) {
-    params.set('query', JSON.stringify(query));
-  }
-  return adminGet(`/admin/admin/v1/users?${params}`);
 }
 
 export async function listRoles(): Promise<{ items: any[] }> {

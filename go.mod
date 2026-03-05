@@ -16,6 +16,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/menta2k/protoc-gen-redact/v3 v3.0.0-20251106150014-896cdd075ab1
 	github.com/redis/go-redis/v9 v9.17.2
+	github.com/tx7do/go-crud/api v0.0.7
 	github.com/tx7do/go-crud/entgo v0.0.38
 	github.com/tx7do/kratos-bootstrap/api v0.0.34
 	github.com/tx7do/kratos-bootstrap/bootstrap v0.1.16
@@ -92,7 +93,6 @@ require (
 	github.com/sony/sonyflake v1.3.0 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/tx7do/go-crud/api v0.0.7 // indirect
 	github.com/tx7do/go-crud/audit v0.0.2 // indirect
 	github.com/tx7do/go-crud/pagination v0.0.11 // indirect
 	github.com/tx7do/go-crud/viewer v0.0.6 // indirect

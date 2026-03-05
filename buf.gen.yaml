@@ -15,6 +15,9 @@ managed:
     - file_option: go_package
       path: warden/service/v1
       value: github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1;wardenpb
+    - file_option: go_package
+      path: admin_stub/v1
+      value: github.com/go-tangra/go-tangra-warden/gen/go/admin_stub/v1;adminstubpb
 
 plugins:
   - local: protoc-gen-go

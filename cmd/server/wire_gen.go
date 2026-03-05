@@ -9,6 +9,7 @@ package main
 import (
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
+	"github.com/go-tangra/go-tangra-warden/internal/client"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
 	"github.com/go-tangra/go-tangra-warden/internal/server"
 	"github.com/go-tangra/go-tangra-warden/internal/service"
@@ -38,22 +39,30 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	checker := providers.ProvideAuthzChecker(engine)
 	folderService := service.NewFolderService(context, folderRepo, permissionRepo, checker)
 	secretVersionRepo := data.NewSecretVersionRepo(context, entClient)
-	client, cleanup2, err := data.NewVaultClient(context)
+	vaultClient, cleanup2, err := data.NewVaultClient(context)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	kvStore := data.NewVaultKVStore(client)
+	kvStore := data.NewVaultKVStore(vaultClient)
 	secretService := service.NewSecretService(context, secretRepo, secretVersionRepo, folderRepo, permissionRepo, kvStore, checker)
 	permissionService := service.NewPermissionService(context, permissionRepo, folderRepo, secretRepo, engine, checker)
 	statisticsRepo := data.NewStatisticsRepo(context, entClient)
-	systemService := service.NewSystemService(context, client, statisticsRepo)
+	systemService := service.NewSystemService(context, vaultClient, statisticsRepo)
 	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker)
 	backupService := service.NewBackupService(context, entClient, kvStore)
-	grpcServer := server.NewGRPCServer(context, certManager, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService)
+	adminClient, cleanup3, err := client.NewAdminClient(context)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	userService := service.NewUserService(context, adminClient)
+	grpcServer := server.NewGRPCServer(context, certManager, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
 	httpServer := server.NewHTTPServer(context)
 	app := newApp(context, grpcServer, httpServer)
 	return app, func() {
+		cleanup3()
 		cleanup2()
 		cleanup()
 	}, nil
