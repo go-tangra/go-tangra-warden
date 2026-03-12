@@ -86,7 +86,7 @@ type CheckResult struct {
 // 4. Check user's roles for indirect permissions
 // 5. Check tenant-level permissions
 func (e *Engine) Check(ctx context.Context, check CheckContext) CheckResult {
-	e.log.Infof("Checking permission: user=%s, resource=%s:%s, permission=%s",
+	e.log.Debugf("Checking permission: user=%s, resource=%s:%s, permission=%s",
 		check.UserID, check.ResourceType, check.ResourceID, check.Permission)
 
 	// Step 1: Check direct user permission on resource

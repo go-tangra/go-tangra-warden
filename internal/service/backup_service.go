@@ -108,16 +108,19 @@ func topologicalSortByParentID[T any](items []T, getID func(T) string, getParent
 }
 
 func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBackupRequest) (*wardenV1.ExportBackupResponse, error) {
+	// Only platform admins can export backups
+	if !grpcx.IsPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("only platform admins can export backups")
+	}
+
 	tenantID := grpcx.GetTenantIDFromContext(ctx)
 	full := false
 
-	if grpcx.IsPlatformAdmin(ctx) && req.TenantId != nil && *req.TenantId == 0 {
+	if req.TenantId != nil && *req.TenantId == 0 {
 		full = true
 		tenantID = 0
 	} else if req.TenantId != nil && *req.TenantId != 0 {
-		if grpcx.IsPlatformAdmin(ctx) {
-			tenantID = *req.TenantId
-		}
+		tenantID = *req.TenantId
 	}
 
 	client := s.entClient.Client()
@@ -125,26 +128,31 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 
 	folders, err := s.exportFolders(ctx, client, tenantID, full)
 	if err != nil {
-		return nil, fmt.Errorf("export folders: %w", err)
+		s.log.Errorf("export folders failed: %v", err)
+		return nil, wardenV1.ErrorInternalServerError("export backup failed")
 	}
 	secrets, err := s.exportSecrets(ctx, client, tenantID, full)
 	if err != nil {
-		return nil, fmt.Errorf("export secrets: %w", err)
+		s.log.Errorf("export secrets failed: %v", err)
+		return nil, wardenV1.ErrorInternalServerError("export backup failed")
 	}
 	secretVersions, err := s.exportSecretVersions(ctx, client, tenantID, full)
 	if err != nil {
-		return nil, fmt.Errorf("export secret versions: %w", err)
+		s.log.Errorf("export secret versions failed: %v", err)
+		return nil, wardenV1.ErrorInternalServerError("export backup failed")
 	}
 	permissions, err := s.exportPermissions(ctx, client, tenantID, full)
 	if err != nil {
-		return nil, fmt.Errorf("export permissions: %w", err)
+		s.log.Errorf("export permissions failed: %v", err)
+		return nil, wardenV1.ErrorInternalServerError("export backup failed")
 	}
 
 	var secretPasswords map[string]string
 	if req.GetIncludeSecrets() {
 		secretPasswords, err = s.exportSecretPasswords(ctx, client, tenantID, full)
 		if err != nil {
-			return nil, fmt.Errorf("export secret passwords: %w", err)
+			s.log.Errorf("export secret passwords failed: %v", err)
+			return nil, wardenV1.ErrorInternalServerError("export backup failed")
 		}
 	}
 
@@ -165,7 +173,8 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 
 	data, err := json.Marshal(backup)
 	if err != nil {
-		return nil, fmt.Errorf("marshal backup: %w", err)
+		s.log.Errorf("marshal backup failed: %v", err)
+		return nil, wardenV1.ErrorInternalServerError("export backup failed")
 	}
 
 	entityCounts := map[string]int64{
@@ -189,25 +198,31 @@ func (s *BackupService) ExportBackup(ctx context.Context, req *wardenV1.ExportBa
 }
 
 func (s *BackupService) ImportBackup(ctx context.Context, req *wardenV1.ImportBackupRequest) (*wardenV1.ImportBackupResponse, error) {
+	// Only platform admins can import backups
+	if !grpcx.IsPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("only platform admins can import backups")
+	}
+
 	tenantID := grpcx.GetTenantIDFromContext(ctx)
 	isPlatformAdmin := grpcx.IsPlatformAdmin(ctx)
 	mode := req.GetMode()
 
 	var backup backupData
 	if err := json.Unmarshal(req.GetData(), &backup); err != nil {
-		return nil, fmt.Errorf("invalid backup data: %w", err)
+		s.log.Errorf("unmarshal backup data failed: %v", err)
+		return nil, wardenV1.ErrorInvalidFormat("invalid backup data format")
 	}
 
 	if backup.Module != backupModule {
-		return nil, fmt.Errorf("backup module mismatch: expected %s, got %s", backupModule, backup.Module)
+		return nil, wardenV1.ErrorInvalidFormat("backup module mismatch: expected %s, got %s", backupModule, backup.Module)
 	}
 	if backup.Version != backupVersion {
-		return nil, fmt.Errorf("backup version mismatch: expected %s, got %s", backupVersion, backup.Version)
+		return nil, wardenV1.ErrorInvalidFormat("backup version mismatch: expected %s, got %s", backupVersion, backup.Version)
 	}
 
 	// For full backups, only platform admins can restore
 	if backup.FullBackup && !isPlatformAdmin {
-		return nil, fmt.Errorf("only platform admins can restore full backups")
+		return nil, wardenV1.ErrorAccessDenied("only platform admins can restore full backups")
 	}
 
 	// Non-platform admins always restore to their own tenant
@@ -363,13 +378,38 @@ func (s *BackupService) importFolders(ctx context.Context, client *ent.Client, i
 		},
 	)
 
+	// Build a map of folder ID -> name for path recalculation
+	folderNames := make(map[string]string, len(sorted))
+	folderParents := make(map[string]*string, len(sorted))
+	for _, e := range sorted {
+		folderNames[e.ID] = e.Name
+		folderParents[e.ID] = e.ParentID
+	}
+
+	// recalculatePath rebuilds the materialized path from the parent chain
+	var recalculatePath func(id string, depth int) (string, int32)
+	recalculatePath = func(id string, depth int) (string, int32) {
+		if depth > 50 { // prevent infinite recursion from circular refs
+			return "/" + folderNames[id], int32(depth)
+		}
+		parentID := folderParents[id]
+		if parentID == nil || *parentID == "" {
+			return "/" + folderNames[id], 0
+		}
+		parentPath, parentDepth := recalculatePath(*parentID, depth+1)
+		return parentPath + "/" + folderNames[id], parentDepth + 1
+	}
+
 	for _, e := range sorted {
 		tid := tenantID
 		if full && e.TenantID != nil {
 			tid = *e.TenantID
 		}
 
-		existing, _ := client.Folder.Get(ctx, e.ID)
+		// Recalculate path and depth from parent hierarchy (never trust backup data)
+		path, calculatedDepth := recalculatePath(e.ID, 0)
+
+		existing, _ := client.Folder.Query().Where(folder.IDEQ(e.ID), folder.TenantIDEQ(tid)).Only(ctx)
 		if existing != nil {
 			if mode == wardenV1.RestoreMode_RESTORE_MODE_SKIP {
 				result.Skipped++
@@ -378,13 +418,13 @@ func (s *BackupService) importFolders(ctx context.Context, client *ent.Client, i
 			_, err := client.Folder.UpdateOneID(e.ID).
 				SetNillableParentID(e.ParentID).
 				SetName(e.Name).
-				SetPath(e.Path).
+				SetPath(path).
 				SetDescription(e.Description).
-				SetDepth(e.Depth).
+				SetDepth(calculatedDepth).
 				SetNillableCreateBy(e.CreateBy).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("folders: update %s: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("folders: update %s failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -395,14 +435,14 @@ func (s *BackupService) importFolders(ctx context.Context, client *ent.Client, i
 				SetNillableTenantID(&tid).
 				SetNillableParentID(e.ParentID).
 				SetName(e.Name).
-				SetPath(e.Path).
+				SetPath(path).
 				SetDescription(e.Description).
-				SetDepth(e.Depth).
+				SetDepth(calculatedDepth).
 				SetNillableCreateBy(e.CreateBy).
 				SetNillableCreateTime(e.CreateTime).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("folders: create %s: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("folders: create %s failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -431,7 +471,10 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 			tid = *e.TenantID
 		}
 
-		existing, _ := client.Secret.Get(ctx, e.ID)
+		// Always regenerate VaultPath — never trust backup data
+		vaultPath := s.kvStore.BuildPath(tid, e.ID)
+
+		existing, _ := client.Secret.Query().Where(secret.IDEQ(e.ID), secret.TenantIDEQ(tid)).Only(ctx)
 		if existing != nil {
 			if mode == wardenV1.RestoreMode_RESTORE_MODE_SKIP {
 				result.Skipped++
@@ -442,7 +485,7 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 				SetName(e.Name).
 				SetUsername(e.Username).
 				SetHostURL(e.HostURL).
-				SetVaultPath(e.VaultPath).
+				SetVaultPath(vaultPath).
 				SetCurrentVersion(e.CurrentVersion).
 				SetMetadata(e.Metadata).
 				SetDescription(e.Description).
@@ -451,7 +494,7 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 				SetNillableUpdateBy(e.UpdateBy).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("secrets: update %s: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("secrets: update %s failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -464,7 +507,7 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 				SetName(e.Name).
 				SetUsername(e.Username).
 				SetHostURL(e.HostURL).
-				SetVaultPath(e.VaultPath).
+				SetVaultPath(vaultPath).
 				SetCurrentVersion(e.CurrentVersion).
 				SetMetadata(e.Metadata).
 				SetDescription(e.Description).
@@ -474,19 +517,19 @@ func (s *BackupService) importSecrets(ctx context.Context, client *ent.Client, i
 				SetNillableCreateTime(e.CreateTime).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("secrets: create %s: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("secrets: create %s failed", e.ID))
 				result.Failed++
 				continue
 			}
 			result.Created++
 		}
 
-		// Restore password to Vault if included in backup
+		// Restore password to Vault using server-generated path
 		if pw, ok := secretPasswords[e.ID]; ok && pw != "" {
 			pwResult.Total++
-			_, err := s.kvStore.StorePassword(ctx, e.VaultPath, pw, nil)
+			_, err := s.kvStore.StorePassword(ctx, vaultPath, pw, nil)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("secretPasswords: store %s: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("secretPasswords: store %s failed", e.ID))
 				pwResult.Failed++
 			} else {
 				pwResult.Created++
@@ -513,7 +556,17 @@ func (s *BackupService) importSecretVersions(ctx context.Context, client *ent.Cl
 			continue
 		}
 
-		existing, _ := client.SecretVersion.Get(ctx, e.ID)
+		// Look up the parent secret to get the correct VaultPath (tenant-scoped)
+		parentSecret, _ := client.Secret.Query().Where(secret.IDEQ(e.SecretID), secret.TenantIDEQ(tenantID)).Only(ctx)
+		vaultPath := e.VaultPath
+		if parentSecret != nil {
+			vaultPath = parentSecret.VaultPath // use the DB's canonical path
+		}
+
+		existing, _ := client.SecretVersion.Query().Where(
+			secretversion.IDEQ(e.ID),
+			secretversion.HasSecretWith(secret.TenantIDEQ(tenantID)),
+		).Only(ctx)
 		if existing != nil {
 			if mode == wardenV1.RestoreMode_RESTORE_MODE_SKIP {
 				result.Skipped++
@@ -522,13 +575,13 @@ func (s *BackupService) importSecretVersions(ctx context.Context, client *ent.Cl
 			_, err := client.SecretVersion.UpdateOneID(e.ID).
 				SetSecretID(e.SecretID).
 				SetVersionNumber(e.VersionNumber).
-				SetVaultPath(e.VaultPath).
+				SetVaultPath(vaultPath).
 				SetComment(e.Comment).
 				SetChecksum(e.Checksum).
 				SetNillableCreateBy(e.CreateBy).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("secretVersions: update %d: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("secretVersions: update %d failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -537,14 +590,14 @@ func (s *BackupService) importSecretVersions(ctx context.Context, client *ent.Cl
 			_, err := client.SecretVersion.Create().
 				SetSecretID(e.SecretID).
 				SetVersionNumber(e.VersionNumber).
-				SetVaultPath(e.VaultPath).
+				SetVaultPath(vaultPath).
 				SetComment(e.Comment).
 				SetChecksum(e.Checksum).
 				SetNillableCreateBy(e.CreateBy).
 				SetNillableCreateTime(e.CreateTime).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("secretVersions: create %d: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("secretVersions: create %d failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -572,7 +625,7 @@ func (s *BackupService) importPermissions(ctx context.Context, client *ent.Clien
 			tid = *e.TenantID
 		}
 
-		existing, _ := client.Permission.Get(ctx, e.ID)
+		existing, _ := client.Permission.Query().Where(permission.IDEQ(e.ID), permission.TenantIDEQ(tid)).Only(ctx)
 		if existing != nil {
 			if mode == wardenV1.RestoreMode_RESTORE_MODE_SKIP {
 				result.Skipped++
@@ -588,7 +641,7 @@ func (s *BackupService) importPermissions(ctx context.Context, client *ent.Clien
 				SetNillableExpiresAt(e.ExpiresAt).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("permissions: update %d: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("permissions: update %d failed", e.ID))
 				result.Failed++
 				continue
 			}
@@ -606,7 +659,7 @@ func (s *BackupService) importPermissions(ctx context.Context, client *ent.Clien
 				SetNillableCreateTime(e.CreateTime).
 				Save(ctx)
 			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("permissions: create %d: %v", e.ID, err))
+				warnings = append(warnings, fmt.Sprintf("permissions: create %d failed", e.ID))
 				result.Failed++
 				continue
 			}

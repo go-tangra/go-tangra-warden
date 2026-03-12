@@ -6,7 +6,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"time"
 )
+
+const vaultOpTimeout = 30 * time.Second
+
+// withTimeout wraps a context with a timeout if it doesn't already have a deadline.
+func withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, vaultOpTimeout)
+}
 
 // KVStore provides KV v2 operations for password storage
 type KVStore struct {
@@ -45,6 +56,9 @@ func (s *KVStore) BuildVersionPath(tenantID uint32, secretID string, version int
 // StorePassword stores a password in Vault KV v2
 // Returns the version number created
 func (s *KVStore) StorePassword(ctx context.Context, path, password string, metadata map[string]string) (int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	data := map[string]any{
 		"password": password,
 	}
@@ -65,12 +79,15 @@ func (s *KVStore) StorePassword(ctx context.Context, path, password string, meta
 		version = secret.VersionMetadata.Version
 	}
 
-	s.client.log.Infof("Stored password at path %s, version %d", path, version)
+	s.client.log.Debugf("Stored password, version %d", version)
 	return version, nil
 }
 
 // GetPassword retrieves the current password from Vault
 func (s *KVStore) GetPassword(ctx context.Context, path string) (string, int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	secret, err := kv.Get(ctx, path)
@@ -97,6 +114,9 @@ func (s *KVStore) GetPassword(ctx context.Context, path string) (string, int, er
 
 // GetPasswordVersion retrieves a specific version of the password from Vault
 func (s *KVStore) GetPasswordVersion(ctx context.Context, path string, version int) (string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	secret, err := kv.GetVersion(ctx, path, version)
@@ -118,66 +138,84 @@ func (s *KVStore) GetPasswordVersion(ctx context.Context, path string, version i
 
 // DeletePassword soft-deletes the latest version of a password
 func (s *KVStore) DeletePassword(ctx context.Context, path string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	if err := kv.Delete(ctx, path); err != nil {
 		return fmt.Errorf("failed to delete password from Vault: %w", err)
 	}
 
-	s.client.log.Infof("Deleted password at path %s", path)
+	s.client.log.Debugf("Deleted password")
 	return nil
 }
 
 // DeletePasswordVersions soft-deletes specific versions
 func (s *KVStore) DeletePasswordVersions(ctx context.Context, path string, versions []int) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	if err := kv.DeleteVersions(ctx, path, versions); err != nil {
 		return fmt.Errorf("failed to delete password versions from Vault: %w", err)
 	}
 
-	s.client.log.Infof("Deleted password versions %v at path %s", versions, path)
+	s.client.log.Debugf("Deleted password versions %v", versions)
 	return nil
 }
 
 // DestroyPassword permanently destroys a password (cannot be recovered)
 func (s *KVStore) DestroyPassword(ctx context.Context, path string, versions []int) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	if err := kv.Destroy(ctx, path, versions); err != nil {
 		return fmt.Errorf("failed to destroy password in Vault: %w", err)
 	}
 
-	s.client.log.Infof("Destroyed password versions %v at path %s", versions, path)
+	s.client.log.Debugf("Destroyed password versions %v", versions)
 	return nil
 }
 
 // DestroyAllVersions permanently destroys all versions and metadata
 func (s *KVStore) DestroyAllVersions(ctx context.Context, path string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	if err := kv.DeleteMetadata(ctx, path); err != nil {
 		return fmt.Errorf("failed to destroy all password versions in Vault: %w", err)
 	}
 
-	s.client.log.Infof("Destroyed all versions at path %s", path)
+	s.client.log.Debugf("Destroyed all versions")
 	return nil
 }
 
 // UndeletePassword recovers soft-deleted versions
 func (s *KVStore) UndeletePassword(ctx context.Context, path string, versions []int) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	if err := kv.Undelete(ctx, path, versions); err != nil {
 		return fmt.Errorf("failed to undelete password versions from Vault: %w", err)
 	}
 
-	s.client.log.Infof("Undeleted password versions %v at path %s", versions, path)
+	s.client.log.Debugf("Undeleted password versions %v", versions)
 	return nil
 }
 
 // ListVersions returns version information for a secret
 func (s *KVStore) ListVersions(ctx context.Context, path string) ([]VersionInfo, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	metadata, err := kv.GetMetadata(ctx, path)
@@ -210,6 +248,9 @@ func (s *KVStore) ListVersions(ctx context.Context, path string) ([]VersionInfo,
 
 // GetCurrentVersion returns the current version number for a secret
 func (s *KVStore) GetCurrentVersion(ctx context.Context, path string) (int, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
 	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
 
 	metadata, err := kv.GetMetadata(ctx, path)

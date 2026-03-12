@@ -11,6 +11,7 @@ import (
 	entCrud "github.com/tx7do/go-crud/entgo"
 
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
@@ -56,12 +57,13 @@ func (r *SecretVersionRepo) Create(ctx context.Context, secretID string, version
 	return entity, nil
 }
 
-// GetBySecretAndVersion retrieves a version by secret ID and version number
-func (r *SecretVersionRepo) GetBySecretAndVersion(ctx context.Context, secretID string, versionNumber int32) (*ent.SecretVersion, error) {
+// GetBySecretAndVersion retrieves a version by secret ID and version number (tenant-scoped via secret join)
+func (r *SecretVersionRepo) GetBySecretAndVersion(ctx context.Context, tenantID uint32, secretID string, versionNumber int32) (*ent.SecretVersion, error) {
 	entity, err := r.entClient.Client().SecretVersion.Query().
 		Where(
 			secretversion.SecretIDEQ(secretID),
 			secretversion.VersionNumberEQ(versionNumber),
+			secretversion.HasSecretWith(secret.TenantIDEQ(tenantID)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -90,10 +92,13 @@ func (r *SecretVersionRepo) GetLatestVersion(ctx context.Context, secretID strin
 	return entity, nil
 }
 
-// List lists all versions for a secret
-func (r *SecretVersionRepo) List(ctx context.Context, secretID string, page, pageSize uint32) ([]*ent.SecretVersion, int, error) {
+// List lists all versions for a secret (tenant-scoped via secret join)
+func (r *SecretVersionRepo) List(ctx context.Context, tenantID uint32, secretID string, page, pageSize uint32) ([]*ent.SecretVersion, int, error) {
 	query := r.entClient.Client().SecretVersion.Query().
-		Where(secretversion.SecretIDEQ(secretID))
+		Where(
+			secretversion.SecretIDEQ(secretID),
+			secretversion.HasSecretWith(secret.TenantIDEQ(tenantID)),
+		)
 
 	// Count total
 	total, err := query.Clone().Count(ctx)

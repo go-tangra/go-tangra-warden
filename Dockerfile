@@ -16,7 +16,7 @@ RUN pnpm build
 # Stage 1: Build Go executable
 ##################################
 
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG APP_VERSION=1.0.0
 

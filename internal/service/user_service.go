@@ -28,7 +28,7 @@ func (s *UserService) ListUsers(ctx context.Context, req *wardenV1.ListWardenUse
 	resp, err := s.adminClient.ListUsers(ctx)
 	if err != nil {
 		s.log.Errorf("Failed to list users from admin-service: %v", err)
-		return nil, err
+		return nil, wardenV1.ErrorInternalServerError("failed to list users")
 	}
 
 	items := make([]*wardenV1.WardenUser, 0, len(resp.Items))
@@ -53,7 +53,7 @@ func (s *UserService) ListRoles(ctx context.Context, req *wardenV1.ListWardenRol
 	resp, err := s.adminClient.ListRoles(ctx)
 	if err != nil {
 		s.log.Errorf("Failed to list roles from admin-service: %v", err)
-		return nil, err
+		return nil, wardenV1.ErrorInternalServerError("failed to list roles")
 	}
 
 	items := make([]*wardenV1.WardenRole, 0, len(resp.Items))

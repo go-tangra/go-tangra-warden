@@ -7,10 +7,14 @@
 package main
 
 import (
+	gocontext "context"
+
 	"github.com/go-kratos/kratos/v2"
+	"github.com/go-tangra/go-tangra-common/viewer"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 	"github.com/go-tangra/go-tangra-warden/internal/client"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
 	"github.com/go-tangra/go-tangra-warden/internal/server"
 	"github.com/go-tangra/go-tangra-warden/internal/service"
 	"github.com/go-tangra/go-tangra-warden/internal/service/providers"
@@ -37,7 +41,7 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	resourceLookup := providers.ProvideResourceLookup(folderRepo, secretRepo)
 	engine := providers.ProvideAuthzEngine(permissionStore, resourceLookup, context)
 	checker := providers.ProvideAuthzChecker(engine)
-	folderService := service.NewFolderService(context, folderRepo, permissionRepo, checker)
+	collector := metrics.NewCollector(context)
 	secretVersionRepo := data.NewSecretVersionRepo(context, entClient)
 	vaultClient, cleanup2, err := data.NewVaultClient(context)
 	if err != nil {
@@ -45,13 +49,14 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 		return nil, nil, err
 	}
 	kvStore := data.NewVaultKVStore(vaultClient)
-	secretService := service.NewSecretService(context, secretRepo, secretVersionRepo, folderRepo, permissionRepo, kvStore, checker)
+	folderService := service.NewFolderService(context, folderRepo, secretRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
+	secretService := service.NewSecretService(context, secretRepo, secretVersionRepo, folderRepo, permissionRepo, kvStore, checker, collector)
 	permissionService := service.NewPermissionService(context, permissionRepo, folderRepo, secretRepo, engine, checker)
 	statisticsRepo := data.NewStatisticsRepo(context, entClient)
 	systemService := service.NewSystemService(context, vaultClient, statisticsRepo)
-	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker)
+	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
 	backupService := service.NewBackupService(context, entClient, kvStore)
-	adminClient, cleanup3, err := client.NewAdminClient(context)
+	adminClient, cleanup3, err := client.NewAdminClient(context, certManager)
 	if err != nil {
 		cleanup2()
 		cleanup()
@@ -60,8 +65,15 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	userService := service.NewUserService(context, adminClient)
 	grpcServer := server.NewGRPCServer(context, certManager, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
 	httpServer := server.NewHTTPServer(context)
+
+	// Seed Prometheus metrics from database
+	seedCtx := viewer.NewSystemViewerContext(gocontext.Background())
+	collector.Seed(seedCtx, statisticsRepo)
+
 	app := newApp(context, grpcServer, httpServer)
 	return app, func() {
+		secretService.Close()
+		collector.Stop(gocontext.Background())
 		cleanup3()
 		cleanup2()
 		cleanup()

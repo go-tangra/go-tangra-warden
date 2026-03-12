@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -49,7 +48,7 @@ func (r *FolderRepo) Create(ctx context.Context, tenantID uint32, parentID *stri
 	depth := int32(0)
 
 	if parentID != nil && *parentID != "" {
-		parent, err := r.GetByID(ctx, *parentID)
+		parent, err := r.GetByIDAndTenant(ctx, tenantID, *parentID)
 		if err != nil {
 			return nil, err
 		}
@@ -93,6 +92,22 @@ func (r *FolderRepo) Create(ctx context.Context, tenantID uint32, parentID *stri
 // GetByID retrieves a folder by ID
 func (r *FolderRepo) GetByID(ctx context.Context, id string) (*ent.Folder, error) {
 	entity, err := r.entClient.Client().Folder.Get(ctx, id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		r.log.Errorf("get folder failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("get folder failed")
+	}
+	return entity, nil
+}
+
+// GetByIDAndTenant retrieves a folder by ID with tenant isolation enforced.
+// Use this in service-layer calls where tenant context is available.
+func (r *FolderRepo) GetByIDAndTenant(ctx context.Context, tenantID uint32, id string) (*ent.Folder, error) {
+	entity, err := r.entClient.Client().Folder.Query().
+		Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, nil
@@ -177,11 +192,30 @@ func (r *FolderRepo) ListByParentID(ctx context.Context, tenantID uint32, parent
 	return entities, nil
 }
 
-// Update updates a folder
-func (r *FolderRepo) Update(ctx context.Context, id string, name, description *string) (*ent.Folder, error) {
-	builder := r.entClient.Client().Folder.UpdateOneID(id).
-		SetUpdateTime(time.Now())
+// Update updates a folder (tenant-scoped). When name changes, path and descendant
+// paths are updated within a transaction for atomicity.
+func (r *FolderRepo) Update(ctx context.Context, tenantID uint32, id string, name, description *string) (*ent.Folder, error) {
+	// Fetch with tenant filter to determine if name is changing
+	f, err := r.entClient.Client().Folder.Query().
+		Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, wardenV1.ErrorFolderNotFound("folder not found")
+		}
+		r.log.Errorf("get folder for update failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("update folder failed")
+	}
 
+	nameChanged := name != nil && *name != f.Name
+
+	// When name changes, use a transaction so folder + descendant path updates are atomic
+	if nameChanged {
+		return r.updateWithRename(ctx, tenantID, f, *name, description)
+	}
+
+	// Simple update (no path changes needed)
+	builder := f.Update().SetUpdateTime(time.Now())
 	if name != nil {
 		builder.SetName(*name)
 	}
@@ -189,30 +223,100 @@ func (r *FolderRepo) Update(ctx context.Context, id string, name, description *s
 		builder.SetDescription(*description)
 	}
 
-	entity, err := builder.Save(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, wardenV1.ErrorFolderNotFound("folder not found")
-		}
-		if ent.IsConstraintError(err) {
+	entity, saveErr := builder.Save(ctx)
+	if saveErr != nil {
+		if ent.IsConstraintError(saveErr) {
 			return nil, wardenV1.ErrorFolderAlreadyExists("folder with this name already exists")
 		}
-		r.log.Errorf("update folder failed: %s", err.Error())
+		r.log.Errorf("update folder failed: %s", saveErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("update folder failed")
+	}
+	return entity, nil
+}
+
+// updateWithRename handles folder rename within a transaction to keep paths consistent.
+func (r *FolderRepo) updateWithRename(ctx context.Context, tenantID uint32, f *ent.Folder, newName string, description *string) (*ent.Folder, error) {
+	tx, err := r.entClient.Client().Tx(ctx)
+	if err != nil {
+		r.log.Errorf("begin transaction failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("update folder failed")
+	}
+
+	oldPath := f.Path
+	parentPath := oldPath[:strings.LastIndex(oldPath, "/")]
+	newPath := parentPath + "/" + newName
+
+	builder := tx.Folder.UpdateOneID(f.ID).
+		SetUpdateTime(time.Now()).
+		SetName(newName).
+		SetPath(newPath)
+	if description != nil {
+		builder.SetDescription(*description)
+	}
+
+	entity, saveErr := builder.Save(ctx)
+	if saveErr != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			r.log.Errorf("rollback failed: %s", rbErr.Error())
+		}
+		if ent.IsConstraintError(saveErr) {
+			return nil, wardenV1.ErrorFolderAlreadyExists("folder with this name already exists")
+		}
+		r.log.Errorf("update folder failed: %s", saveErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("update folder failed")
+	}
+
+	// Update descendant paths within the same transaction
+	descendants, descErr := tx.Folder.Query().
+		Where(folder.TenantIDEQ(tenantID), folder.PathHasPrefix(oldPath+"/")).
+		All(ctx)
+	if descErr != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			r.log.Errorf("rollback failed: %s", rbErr.Error())
+		}
+		r.log.Errorf("query descendant folders for path update failed: %s", descErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("update folder failed")
+	}
+	for _, d := range descendants {
+		descNewPath := strings.Replace(d.Path, oldPath, newPath, 1)
+		if _, dErr := tx.Folder.UpdateOneID(d.ID).SetPath(descNewPath).SetUpdateTime(time.Now()).Save(ctx); dErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			r.log.Errorf("update descendant path failed: %s", dErr.Error())
+			return nil, wardenV1.ErrorInternalServerError("update folder failed")
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		r.log.Errorf("commit folder update failed: %s", err.Error())
 		return nil, wardenV1.ErrorInternalServerError("update folder failed")
 	}
 
 	return entity, nil
 }
 
-// Move moves a folder to a new parent
-func (r *FolderRepo) Move(ctx context.Context, id string, newParentID *string) (*ent.Folder, error) {
-	// Get the folder
-	f, err := r.GetByID(ctx, id)
+// Move moves a folder to a new parent (tenant-scoped).
+// Uses a database transaction to prevent race conditions with concurrent moves
+// that could create circular references.
+func (r *FolderRepo) Move(ctx context.Context, tenantID uint32, id string, newParentID *string) (*ent.Folder, error) {
+	tx, err := r.entClient.Client().Tx(ctx)
 	if err != nil {
-		return nil, err
+		r.log.Errorf("begin transaction failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("move folder failed")
 	}
-	if f == nil {
-		return nil, wardenV1.ErrorFolderNotFound("folder not found")
+
+	// Get the folder within the transaction with a lock (tenant-scoped)
+	f, err := tx.Folder.Query().Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).ForUpdate().Only(ctx)
+	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			r.log.Errorf("rollback failed: %s", rbErr.Error())
+		}
+		if ent.IsNotFound(err) {
+			return nil, wardenV1.ErrorFolderNotFound("folder not found")
+		}
+		r.log.Errorf("get folder for move failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("move folder failed")
 	}
 
 	// Calculate new path and depth
@@ -222,19 +326,30 @@ func (r *FolderRepo) Move(ctx context.Context, id string, newParentID *string) (
 	if newParentID != nil && *newParentID != "" {
 		// Check for circular reference
 		if *newParentID == id {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
 			return nil, wardenV1.ErrorCircularFolderReference("cannot move folder to itself")
 		}
 
-		parent, err := r.GetByID(ctx, *newParentID)
+		// Lock the parent too (tenant-scoped), to prevent concurrent moves from creating cycles
+		parent, err := tx.Folder.Query().Where(folder.IDEQ(*newParentID), folder.TenantIDEQ(tenantID)).ForUpdate().Only(ctx)
 		if err != nil {
-			return nil, err
-		}
-		if parent == nil {
-			return nil, wardenV1.ErrorFolderNotFound("new parent folder not found")
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			if ent.IsNotFound(err) {
+				return nil, wardenV1.ErrorFolderNotFound("new parent folder not found")
+			}
+			r.log.Errorf("get parent folder failed: %s", err.Error())
+			return nil, wardenV1.ErrorInternalServerError("move folder failed")
 		}
 
 		// Check if new parent is a descendant of the folder being moved
 		if strings.HasPrefix(parent.Path, f.Path+"/") {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
 			return nil, wardenV1.ErrorCircularFolderReference("cannot move folder to its own descendant")
 		}
 
@@ -243,7 +358,7 @@ func (r *FolderRepo) Move(ctx context.Context, id string, newParentID *string) (
 	}
 
 	// Update folder
-	builder := r.entClient.Client().Folder.UpdateOneID(id).
+	builder := tx.Folder.UpdateOneID(id).
 		SetPath(newPath).
 		SetDepth(newDepth).
 		SetUpdateTime(time.Now())
@@ -256,6 +371,9 @@ func (r *FolderRepo) Move(ctx context.Context, id string, newParentID *string) (
 
 	entity, err := builder.Save(ctx)
 	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			r.log.Errorf("rollback failed: %s", rbErr.Error())
+		}
 		if ent.IsConstraintError(err) {
 			return nil, wardenV1.ErrorFolderAlreadyExists("folder with this name already exists in the destination")
 		}
@@ -263,46 +381,42 @@ func (r *FolderRepo) Move(ctx context.Context, id string, newParentID *string) (
 		return nil, wardenV1.ErrorInternalServerError("move folder failed")
 	}
 
-	// Update paths of all descendant folders
-	if err := r.updateDescendantPaths(ctx, *f.TenantID, f.Path, newPath); err != nil {
-		r.log.Errorf("update descendant paths failed: %s", err.Error())
-		// Note: This is a partial failure, the main folder was moved but descendants may have stale paths
+	// Update paths of all descendant folders within the same transaction (tenant-scoped)
+	descendants, descErr := tx.Folder.Query().
+		Where(folder.TenantIDEQ(tenantID), folder.PathHasPrefix(f.Path+"/")).
+		All(ctx)
+	if descErr != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			r.log.Errorf("rollback failed: %s", rbErr.Error())
+		}
+		r.log.Errorf("query descendant folders failed: %s", descErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("move folder failed")
+	}
+	for _, d := range descendants {
+		descNewPath := strings.Replace(d.Path, f.Path, newPath, 1)
+		if _, descErr := tx.Folder.UpdateOneID(d.ID).SetPath(descNewPath).SetUpdateTime(time.Now()).Save(ctx); descErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			r.log.Errorf("update descendant path failed: %s", descErr.Error())
+			return nil, wardenV1.ErrorInternalServerError("move folder failed")
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		r.log.Errorf("commit folder move failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("move folder failed")
 	}
 
 	return entity, nil
 }
 
-// updateDescendantPaths updates paths of all folders under a path
-func (r *FolderRepo) updateDescendantPaths(ctx context.Context, tenantID uint32, oldPathPrefix, newPathPrefix string) error {
-	descendants, err := r.entClient.Client().Folder.Query().
-		Where(
-			folder.TenantIDEQ(tenantID),
-			folder.PathHasPrefix(oldPathPrefix+"/"),
-		).
-		All(ctx)
-	if err != nil {
-		return err
-	}
 
-	for _, d := range descendants {
-		newPath := strings.Replace(d.Path, oldPathPrefix, newPathPrefix, 1)
-		_, err := r.entClient.Client().Folder.UpdateOneID(d.ID).
-			SetPath(newPath).
-			SetUpdateTime(time.Now()).
-			Save(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Delete deletes a folder
-func (r *FolderRepo) Delete(ctx context.Context, id string, force bool) error {
-	// Check if folder has children
+// Delete deletes a folder (tenant-scoped)
+func (r *FolderRepo) Delete(ctx context.Context, tenantID uint32, id string, force bool) error {
+	// Check if folder has children (tenant-scoped)
 	childCount, err := r.entClient.Client().Folder.Query().
-		Where(folder.ParentIDEQ(id)).
+		Where(folder.ParentIDEQ(id), folder.TenantIDEQ(tenantID)).
 		Count(ctx)
 	if err != nil {
 		r.log.Errorf("count child folders failed: %s", err.Error())
@@ -312,10 +426,11 @@ func (r *FolderRepo) Delete(ctx context.Context, id string, force bool) error {
 		return wardenV1.ErrorFolderNotEmpty("folder has child folders")
 	}
 
-	// Check if folder has active secrets (excluding deleted ones)
+	// Check if folder has active secrets (tenant-scoped)
 	secretCount, err := r.entClient.Client().Secret.Query().
 		Where(
 			secret.FolderIDEQ(id),
+			secret.TenantIDEQ(tenantID),
 			secret.StatusNEQ(secret.StatusSECRET_STATUS_DELETED),
 		).
 		Count(ctx)
@@ -328,38 +443,91 @@ func (r *FolderRepo) Delete(ctx context.Context, id string, force bool) error {
 	}
 
 	if force {
-		// Delete all descendants recursively
-		f, err := r.GetByID(ctx, id)
+		// Use a transaction to ensure atomicity of the cascade delete
+		tx, txErr := r.entClient.Client().Tx(ctx)
+		if txErr != nil {
+			r.log.Errorf("begin transaction failed: %s", txErr.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
+		}
+
+		f, err := tx.Folder.Query().
+			Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).
+			Only(ctx)
 		if err != nil {
-			return err
-		}
-		if f != nil {
-			// Delete all descendant folders
-			_, err = r.entClient.Client().Folder.Delete().
-				Where(folder.PathHasPrefix(f.Path + "/")).
-				Exec(ctx)
-			if err != nil {
-				r.log.Errorf("delete descendant folders failed: %s", err.Error())
-				return wardenV1.ErrorInternalServerError("delete folder failed")
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
 			}
+			if ent.IsNotFound(err) {
+				return wardenV1.ErrorFolderNotFound("folder not found")
+			}
+			r.log.Errorf("get folder for delete failed: %s", err.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
 		}
+
+		// Delete all secrets in the folder tree (tenant-scoped)
+		_, secretErr := tx.Secret.Delete().
+			Where(secret.TenantIDEQ(tenantID), secret.Or(
+				secret.FolderIDEQ(id),
+				secret.HasFolderWith(folder.PathHasPrefix(f.Path+"/")),
+			)).
+			Exec(ctx)
+		if secretErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			r.log.Errorf("delete secrets in folder tree failed: %s", secretErr.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
+		}
+
+		// Delete all descendant folders (tenant-scoped)
+		_, descErr := tx.Folder.Delete().
+			Where(folder.TenantIDEQ(tenantID), folder.PathHasPrefix(f.Path+"/")).
+			Exec(ctx)
+		if descErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			r.log.Errorf("delete descendant folders failed: %s", descErr.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
+		}
+
+		// Delete the folder itself
+		_, delErr := tx.Folder.Delete().
+			Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).
+			Exec(ctx)
+		if delErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				r.log.Errorf("rollback failed: %s", rbErr.Error())
+			}
+			r.log.Errorf("delete folder failed: %s", delErr.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
+		}
+
+		if err := tx.Commit(); err != nil {
+			r.log.Errorf("commit folder delete failed: %s", err.Error())
+			return wardenV1.ErrorInternalServerError("delete folder failed")
+		}
+		return nil
 	}
 
-	err = r.entClient.Client().Folder.DeleteOneID(id).Exec(ctx)
+	// Non-force: simple delete of the folder itself (tenant-scoped)
+	delCount, err := r.entClient.Client().Folder.Delete().
+		Where(folder.IDEQ(id), folder.TenantIDEQ(tenantID)).
+		Exec(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return wardenV1.ErrorFolderNotFound("folder not found")
-		}
 		r.log.Errorf("delete folder failed: %s", err.Error())
 		return wardenV1.ErrorInternalServerError("delete folder failed")
+	}
+	if delCount == 0 {
+		return wardenV1.ErrorFolderNotFound("folder not found")
 	}
 	return nil
 }
 
 // CountSecrets counts secrets in a folder
-func (r *FolderRepo) CountSecrets(ctx context.Context, folderID string) (int, error) {
+func (r *FolderRepo) CountSecrets(ctx context.Context, tenantID uint32, folderID string) (int, error) {
 	count, err := r.entClient.Client().Secret.Query().
-		Where(secret.FolderIDEQ(folderID)).
+		Where(secret.FolderIDEQ(folderID), secret.TenantIDEQ(tenantID)).
 		Count(ctx)
 	if err != nil {
 		r.log.Errorf("count secrets failed: %s", err.Error())
@@ -369,9 +537,9 @@ func (r *FolderRepo) CountSecrets(ctx context.Context, folderID string) (int, er
 }
 
 // CountSubfolders counts subfolders in a folder
-func (r *FolderRepo) CountSubfolders(ctx context.Context, folderID string) (int, error) {
+func (r *FolderRepo) CountSubfolders(ctx context.Context, tenantID uint32, folderID string) (int, error) {
 	count, err := r.entClient.Client().Folder.Query().
-		Where(folder.ParentIDEQ(folderID)).
+		Where(folder.ParentIDEQ(folderID), folder.TenantIDEQ(tenantID)).
 		Count(ctx)
 	if err != nil {
 		r.log.Errorf("count subfolders failed: %s", err.Error())
@@ -380,9 +548,35 @@ func (r *FolderRepo) CountSubfolders(ctx context.Context, folderID string) (int,
 	return count, nil
 }
 
+// ListDescendantIDs returns all descendant folder IDs for a folder (excluding itself)
+func (r *FolderRepo) ListDescendantIDs(ctx context.Context, tenantID uint32, folderID string) ([]string, error) {
+	f, err := r.GetByIDAndTenant(ctx, tenantID, folderID)
+	if err != nil {
+		return nil, err
+	}
+	if f == nil {
+		return nil, nil
+	}
+
+	descendants, err := r.entClient.Client().Folder.Query().
+		Where(folder.TenantIDEQ(tenantID), folder.PathHasPrefix(f.Path+"/")).
+		Select(folder.FieldID).
+		All(ctx)
+	if err != nil {
+		r.log.Errorf("list descendant folder IDs failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("list descendant folders failed")
+	}
+
+	ids := make([]string, len(descendants))
+	for i, d := range descendants {
+		ids[i] = d.ID
+	}
+	return ids, nil
+}
+
 // GetParentID returns the parent folder ID (implements ResourceLookup interface)
 func (r *FolderRepo) GetFolderParentID(ctx context.Context, tenantID uint32, folderID string) (*string, error) {
-	f, err := r.GetByID(ctx, folderID)
+	f, err := r.GetByIDAndTenant(ctx, tenantID, folderID)
 	if err != nil {
 		return nil, err
 	}
@@ -424,19 +618,19 @@ func (r *FolderRepo) ToProto(entity *ent.Folder) *wardenV1.Folder {
 }
 
 // ToProtoWithCounts converts an ent.Folder to wardenV1.Folder with counts
-func (r *FolderRepo) ToProtoWithCounts(ctx context.Context, entity *ent.Folder) (*wardenV1.Folder, error) {
+func (r *FolderRepo) ToProtoWithCounts(ctx context.Context, tenantID uint32, entity *ent.Folder) (*wardenV1.Folder, error) {
 	proto := r.ToProto(entity)
 	if proto == nil {
 		return nil, nil
 	}
 
-	secretCount, err := r.CountSecrets(ctx, entity.ID)
+	secretCount, err := r.CountSecrets(ctx, tenantID, entity.ID)
 	if err != nil {
 		return nil, err
 	}
 	proto.SecretCount = int32(secretCount)
 
-	subfolderCount, err := r.CountSubfolders(ctx, entity.ID)
+	subfolderCount, err := r.CountSubfolders(ctx, tenantID, entity.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +645,7 @@ func (r *FolderRepo) BuildTree(ctx context.Context, tenantID uint32, rootID *str
 	var err error
 
 	if rootID != nil && *rootID != "" {
-		root, err := r.GetByID(ctx, *rootID)
+		root, err := r.GetByIDAndTenant(ctx, tenantID, *rootID)
 		if err != nil {
 			return nil, err
 		}
@@ -490,7 +684,7 @@ func (r *FolderRepo) buildTreeNode(ctx context.Context, f *ent.Folder, currentDe
 	var err error
 
 	if includeCounts {
-		folderProto, err = r.ToProtoWithCounts(ctx, f)
+		folderProto, err = r.ToProtoWithCounts(ctx, *f.TenantID, f)
 		if err != nil {
 			return nil, err
 		}
@@ -527,7 +721,7 @@ func (r *FolderRepo) buildTreeNode(ctx context.Context, f *ent.Folder, currentDe
 
 // GetAllDescendantIDs returns all descendant folder IDs
 func (r *FolderRepo) GetAllDescendantIDs(ctx context.Context, tenantID uint32, folderID string) ([]string, error) {
-	f, err := r.GetByID(ctx, folderID)
+	f, err := r.GetByIDAndTenant(ctx, tenantID, folderID)
 	if err != nil {
 		return nil, err
 	}
@@ -555,10 +749,3 @@ func (r *FolderRepo) GetAllDescendantIDs(ctx context.Context, tenantID uint32, f
 	return ids, nil
 }
 
-// Utility function to generate an error message
-func folderError(msg string, args ...any) string {
-	if len(args) > 0 {
-		return fmt.Sprintf(msg, args...)
-	}
-	return msg
-}

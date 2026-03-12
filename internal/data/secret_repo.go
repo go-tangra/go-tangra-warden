@@ -19,6 +19,12 @@ import (
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
 )
 
+// SecretInfo holds minimal secret info for lookups (e.g. duplicate detection in imports).
+type SecretInfo struct {
+	ID        string
+	VaultPath string
+}
+
 type SecretRepo struct {
 	entClient *entCrud.EntClient[*ent.Client]
 	log       *log.Helper
@@ -79,6 +85,23 @@ func (r *SecretRepo) Create(ctx context.Context, tenantID uint32, folderID *stri
 func (r *SecretRepo) GetByID(ctx context.Context, id string) (*ent.Secret, error) {
 	entity, err := r.entClient.Client().Secret.Query().
 		Where(secret.IDEQ(id)).
+		WithFolder().
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		r.log.Errorf("get secret failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("get secret failed")
+	}
+	return entity, nil
+}
+
+// GetByIDAndTenant retrieves a secret by ID with tenant isolation enforced.
+// Use this in service-layer calls where tenant context is available.
+func (r *SecretRepo) GetByIDAndTenant(ctx context.Context, tenantID uint32, id string) (*ent.Secret, error) {
+	entity, err := r.entClient.Client().Secret.Query().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
 		WithFolder().
 		Only(ctx)
 	if err != nil {
@@ -163,9 +186,21 @@ func (r *SecretRepo) List(ctx context.Context, tenantID uint32, folderID *string
 	return entities, total, nil
 }
 
-// Update updates a secret's metadata
-func (r *SecretRepo) Update(ctx context.Context, id string, name, username, hostURL, description *string, metadata map[string]any, status *secret.Status, updatedBy *uint32) (*ent.Secret, error) {
-	builder := r.entClient.Client().Secret.UpdateOneID(id).
+// Update updates a secret's metadata (tenant-scoped)
+func (r *SecretRepo) Update(ctx context.Context, tenantID uint32, id string, name, username, hostURL, description *string, metadata map[string]any, status *secret.Status, updatedBy *uint32) (*ent.Secret, error) {
+	// Use query-based update to enforce tenant isolation
+	entity, err := r.entClient.Client().Secret.Query().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, wardenV1.ErrorSecretNotFound("secret not found")
+		}
+		r.log.Errorf("get secret for update failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("update secret failed")
+	}
+
+	builder := entity.Update().
 		SetUpdateTime(time.Now())
 
 	if name != nil {
@@ -190,24 +225,33 @@ func (r *SecretRepo) Update(ctx context.Context, id string, name, username, host
 		builder.SetUpdateBy(*updatedBy)
 	}
 
-	entity, err := builder.Save(ctx)
+	updated, saveErr := builder.Save(ctx)
+	if saveErr != nil {
+		if ent.IsConstraintError(saveErr) {
+			return nil, wardenV1.ErrorSecretAlreadyExists("secret with this name already exists")
+		}
+		r.log.Errorf("update secret failed: %s", saveErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("update secret failed")
+	}
+
+	return updated, nil
+}
+
+// UpdateVersion updates the current version of a secret (tenant-scoped)
+func (r *SecretRepo) UpdateVersion(ctx context.Context, tenantID uint32, id string, version int32, updatedBy *uint32) (*ent.Secret, error) {
+	// Verify secret belongs to tenant before updating
+	entity, err := r.entClient.Client().Secret.Query().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, wardenV1.ErrorSecretNotFound("secret not found")
 		}
-		if ent.IsConstraintError(err) {
-			return nil, wardenV1.ErrorSecretAlreadyExists("secret with this name already exists")
-		}
-		r.log.Errorf("update secret failed: %s", err.Error())
-		return nil, wardenV1.ErrorInternalServerError("update secret failed")
+		r.log.Errorf("get secret for version update failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("update secret version failed")
 	}
 
-	return entity, nil
-}
-
-// UpdateVersion updates the current version of a secret
-func (r *SecretRepo) UpdateVersion(ctx context.Context, id string, version int32, updatedBy *uint32) (*ent.Secret, error) {
-	builder := r.entClient.Client().Secret.UpdateOneID(id).
+	builder := entity.Update().
 		SetCurrentVersion(version).
 		SetUpdateTime(time.Now())
 
@@ -215,21 +259,30 @@ func (r *SecretRepo) UpdateVersion(ctx context.Context, id string, version int32
 		builder.SetUpdateBy(*updatedBy)
 	}
 
-	entity, err := builder.Save(ctx)
+	updated, saveErr := builder.Save(ctx)
+	if saveErr != nil {
+		r.log.Errorf("update secret version failed: %s", saveErr.Error())
+		return nil, wardenV1.ErrorInternalServerError("update secret version failed")
+	}
+
+	return updated, nil
+}
+
+// Move moves a secret to a different folder (tenant-scoped)
+func (r *SecretRepo) Move(ctx context.Context, tenantID uint32, id string, newFolderID *string, updatedBy *uint32) (*ent.Secret, error) {
+	// Verify secret belongs to tenant before updating
+	entity, err := r.entClient.Client().Secret.Query().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, wardenV1.ErrorSecretNotFound("secret not found")
 		}
-		r.log.Errorf("update secret version failed: %s", err.Error())
-		return nil, wardenV1.ErrorInternalServerError("update secret version failed")
+		r.log.Errorf("get secret for move failed: %s", err.Error())
+		return nil, wardenV1.ErrorInternalServerError("move secret failed")
 	}
 
-	return entity, nil
-}
-
-// Move moves a secret to a different folder
-func (r *SecretRepo) Move(ctx context.Context, id string, newFolderID *string, updatedBy *uint32) (*ent.Secret, error) {
-	builder := r.entClient.Client().Secret.UpdateOneID(id).
+	builder := entity.Update().
 		SetUpdateTime(time.Now())
 
 	if newFolderID != nil && *newFolderID != "" {
@@ -242,42 +295,43 @@ func (r *SecretRepo) Move(ctx context.Context, id string, newFolderID *string, u
 		builder.SetUpdateBy(*updatedBy)
 	}
 
-	entity, err := builder.Save(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, wardenV1.ErrorSecretNotFound("secret not found")
-		}
-		if ent.IsConstraintError(err) {
+	moved, saveErr := builder.Save(ctx)
+	if saveErr != nil {
+		if ent.IsConstraintError(saveErr) {
 			return nil, wardenV1.ErrorSecretAlreadyExists("secret with this name already exists in the destination folder")
 		}
-		r.log.Errorf("move secret failed: %s", err.Error())
+		r.log.Errorf("move secret failed: %s", saveErr.Error())
 		return nil, wardenV1.ErrorInternalServerError("move secret failed")
 	}
 
-	return entity, nil
+	return moved, nil
 }
 
-// Delete deletes a secret (soft or permanent)
-func (r *SecretRepo) Delete(ctx context.Context, id string, permanent bool) error {
+// Delete deletes a secret (soft or permanent, tenant-scoped)
+func (r *SecretRepo) Delete(ctx context.Context, tenantID uint32, id string, permanent bool) error {
+	// Verify secret belongs to tenant
+	entity, err := r.entClient.Client().Secret.Query().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return wardenV1.ErrorSecretNotFound("secret not found")
+		}
+		r.log.Errorf("get secret for delete failed: %s", err.Error())
+		return wardenV1.ErrorInternalServerError("delete secret failed")
+	}
+
 	if permanent {
-		err := r.entClient.Client().Secret.DeleteOneID(id).Exec(ctx)
-		if err != nil {
-			if ent.IsNotFound(err) {
-				return wardenV1.ErrorSecretNotFound("secret not found")
-			}
-			r.log.Errorf("delete secret failed: %s", err.Error())
+		if delErr := r.entClient.Client().Secret.DeleteOne(entity).Exec(ctx); delErr != nil {
+			r.log.Errorf("delete secret failed: %s", delErr.Error())
 			return wardenV1.ErrorInternalServerError("delete secret failed")
 		}
 	} else {
-		_, err := r.entClient.Client().Secret.UpdateOneID(id).
+		if _, softErr := entity.Update().
 			SetStatus(secret.StatusSECRET_STATUS_DELETED).
 			SetUpdateTime(time.Now()).
-			Save(ctx)
-		if err != nil {
-			if ent.IsNotFound(err) {
-				return wardenV1.ErrorSecretNotFound("secret not found")
-			}
-			r.log.Errorf("soft delete secret failed: %s", err.Error())
+			Save(ctx); softErr != nil {
+			r.log.Errorf("soft delete secret failed: %s", softErr.Error())
 			return wardenV1.ErrorInternalServerError("delete secret failed")
 		}
 	}
@@ -339,7 +393,7 @@ func (r *SecretRepo) Search(ctx context.Context, tenantID uint32, query string, 
 
 // GetSecretFolderID returns the folder ID for a secret (implements ResourceLookup interface)
 func (r *SecretRepo) GetSecretFolderID(ctx context.Context, tenantID uint32, secretID string) (*string, error) {
-	s, err := r.GetByID(ctx, secretID)
+	s, err := r.GetByIDAndTenant(ctx, tenantID, secretID)
 	if err != nil {
 		return nil, err
 	}
@@ -366,8 +420,10 @@ func (r *SecretRepo) ListAll(ctx context.Context, tenantID uint32) ([]*ent.Secre
 
 // ListAllInFolderTree returns all secrets in a folder and its subfolders
 func (r *SecretRepo) ListAllInFolderTree(ctx context.Context, tenantID uint32, folderID string) ([]*ent.Secret, error) {
-	// Get the folder to get its path
-	f, err := r.entClient.Client().Folder.Get(ctx, folderID)
+	// Get the folder to get its path (tenant-scoped)
+	f, err := r.entClient.Client().Folder.Query().
+		Where(folder.IDEQ(folderID), folder.TenantIDEQ(tenantID)).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, nil
@@ -379,9 +435,9 @@ func (r *SecretRepo) ListAllInFolderTree(ctx context.Context, tenantID uint32, f
 	// Get all folder IDs in the tree
 	folderIDs := []string{folderID}
 
-	// Get subfolders recursively using path prefix
+	// Get subfolders recursively using path prefix (tenant-scoped)
 	folders, err := r.entClient.Client().Folder.Query().
-		Where(folder.PathHasPrefix(f.Path + "/")).
+		Where(folder.TenantIDEQ(tenantID), folder.PathHasPrefix(f.Path+"/")).
 		All(ctx)
 
 	if err == nil {

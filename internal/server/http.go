@@ -4,8 +4,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"time"
 
 	kratosHttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
 
 	"github.com/go-tangra/go-tangra-warden/cmd/server/assets"
@@ -20,7 +22,13 @@ func NewHTTPServer(ctx *bootstrap.Context) *kratosHttp.Server {
 		addr = "0.0.0.0:9301"
 	}
 
-	srv := kratosHttp.NewServer(kratosHttp.Address(addr))
+	srv := kratosHttp.NewServer(
+		kratosHttp.Address(addr),
+		kratosHttp.Timeout(30*time.Second),
+		kratosHttp.Middleware(
+			recovery.Recovery(),
+		),
+	)
 
 	route := srv.Route("/")
 	route.GET("/health", func(ctx kratosHttp.Context) error {

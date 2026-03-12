@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -42,11 +43,12 @@ func DefaultConfig() *Config {
 
 // Client wraps HashiCorp Vault client with AppRole authentication
 type Client struct {
-	client    *vault.Client
-	config    *Config
-	log       *log.Helper
-	mountPath string
-	cancel    context.CancelFunc // stops the token renewal goroutine
+	client        *vault.Client
+	config        *Config
+	log           *log.Helper
+	mountPath     string
+	cancel        context.CancelFunc // stops the token renewal goroutine
+	renewalFailed atomic.Bool        // set when token renewal exhausts all retries
 }
 
 // NewClient creates a new Vault client with AppRole authentication
@@ -99,6 +101,13 @@ func NewClient(cfg *Config, logger log.Logger) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to authenticate with AppRole: %w", err)
 		}
+
+		// Clear credentials from memory after successful authentication.
+		// The Vault client now holds a token; the AppRole credentials are no longer needed
+		// until re-authentication, which loads them fresh from files/env.
+		cfg.RoleID = ""
+		cfg.SecretID = ""
+
 		// Start background token renewal
 		ctx, cancel := context.WithCancel(context.Background())
 		c.cancel = cancel
@@ -167,8 +176,20 @@ func (c *Config) loadCredentialsFromEnv() error {
 	return nil
 }
 
-// authenticateAppRole authenticates using AppRole method
+// authenticateAppRole authenticates using AppRole method.
+// Reloads credentials from files/env on each call so that cleared in-memory
+// values are repopulated for re-authentication.
 func (c *Client) authenticateAppRole(ctx context.Context) (*vault.Secret, error) {
+	// Reload credentials if they were cleared from memory
+	if c.config.RoleID == "" || c.config.SecretID == "" {
+		if err := c.config.loadCredentialsFromFiles(); err != nil {
+			return nil, fmt.Errorf("failed to reload credentials from files: %w", err)
+		}
+		if err := c.config.loadCredentialsFromEnv(); err != nil {
+			return nil, fmt.Errorf("failed to reload credentials from env: %w", err)
+		}
+	}
+
 	appRoleAuth, err := approle.NewAppRoleAuth(
 		c.config.RoleID,
 		&approle.SecretID{FromString: c.config.SecretID},
@@ -186,13 +207,24 @@ func (c *Client) authenticateAppRole(ctx context.Context) (*vault.Secret, error)
 		return nil, errors.New("no auth info returned from AppRole login")
 	}
 
+	// Clear credentials from memory again after re-auth
+	c.config.RoleID = ""
+	c.config.SecretID = ""
+
 	c.log.Infof("Successfully authenticated with Vault using AppRole")
 	return authInfo, nil
 }
 
 // renewToken runs a background loop that renews the Vault token before it expires.
-// If renewal fails (e.g. past max TTL), it re-authenticates with AppRole.
+// If renewal fails (e.g. past max TTL), it re-authenticates with AppRole
+// using exponential backoff with a maximum delay.
 func (c *Client) renewToken(ctx context.Context, secret *vault.Secret) {
+	const (
+		initialBackoff = 5 * time.Second
+		maxBackoff     = 5 * time.Minute
+		maxRetries     = 10
+	)
+
 	if secret == nil || secret.Auth == nil {
 		c.log.Warn("No auth secret to renew")
 		return
@@ -216,19 +248,33 @@ func (c *Client) renewToken(ctx context.Context, secret *vault.Secret) {
 			return
 		case err := <-watcher.DoneCh():
 			// Token can no longer be renewed (past max TTL or revoked).
-			// Re-authenticate with AppRole to get a fresh token.
+			// Re-authenticate with AppRole using exponential backoff.
 			c.log.Warnf("Vault token renewal ended (err=%v), re-authenticating", err)
-			newSecret, authErr := c.authenticateAppRole(ctx)
-			if authErr != nil {
-				c.log.Errorf("Failed to re-authenticate with Vault: %v", authErr)
-				// Retry after a delay
+
+			backoff := initialBackoff
+			var newSecret *vault.Secret
+			for attempt := 1; attempt <= maxRetries; attempt++ {
+				newSecret, err = c.authenticateAppRole(ctx)
+				if err == nil {
+					break
+				}
+				c.log.Errorf("Re-auth attempt %d/%d failed: %v (backoff %v)", attempt, maxRetries, err, backoff)
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(10 * time.Second):
+				case <-time.After(backoff):
 				}
-				continue
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
 			}
+			if newSecret == nil {
+				c.log.Errorf("All %d re-auth attempts failed, giving up token renewal", maxRetries)
+				c.renewalFailed.Store(true)
+				return
+			}
+
 			// Restart watcher with the new token
 			watcher.Stop()
 			watcher, err = c.client.NewLifetimeWatcher(&vault.LifetimeWatcherInput{
@@ -243,6 +289,13 @@ func (c *Client) renewToken(ctx context.Context, secret *vault.Secret) {
 			c.log.Infof("Vault token renewed, next renewal in %ds", info.Secret.Auth.LeaseDuration)
 		}
 	}
+}
+
+// IsTokenRenewalFailed returns true if the background token renewal goroutine
+// exhausted all re-auth retries and gave up. When true, the Vault client is
+// likely operating with an expired token and all operations will fail.
+func (c *Client) IsTokenRenewalFailed() bool {
+	return c.renewalFailed.Load()
 }
 
 // Health checks Vault health status

@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-tangra/go-tangra-warden/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
+	"github.com/go-tangra/go-tangra-warden/pkg/vault"
 
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
 )
@@ -16,23 +18,35 @@ import (
 type FolderService struct {
 	wardenV1.UnimplementedWardenFolderServiceServer
 
-	log        *log.Helper
-	folderRepo *data.FolderRepo
-	permRepo   *data.PermissionRepo
-	checker    *authz.Checker
+	log         *log.Helper
+	folderRepo  *data.FolderRepo
+	secretRepo  *data.SecretRepo
+	versionRepo *data.SecretVersionRepo
+	permRepo    *data.PermissionRepo
+	kvStore     *vault.KVStore
+	checker     *authz.Checker
+	metrics     *metrics.Collector
 }
 
 func NewFolderService(
 	ctx *bootstrap.Context,
 	folderRepo *data.FolderRepo,
+	secretRepo *data.SecretRepo,
+	versionRepo *data.SecretVersionRepo,
 	permRepo *data.PermissionRepo,
+	kvStore *vault.KVStore,
 	checker *authz.Checker,
+	metrics *metrics.Collector,
 ) *FolderService {
 	return &FolderService{
-		log:        ctx.NewLoggerHelper("warden/service/folder"),
-		folderRepo: folderRepo,
-		permRepo:   permRepo,
-		checker:    checker,
+		log:         ctx.NewLoggerHelper("warden/service/folder"),
+		folderRepo:  folderRepo,
+		secretRepo:  secretRepo,
+		versionRepo: versionRepo,
+		permRepo:    permRepo,
+		kvStore:     kvStore,
+		checker:     checker,
+		metrics:     metrics,
 	}
 }
 
@@ -64,6 +78,10 @@ func (s *FolderService) CreateFolder(ctx context.Context, req *wardenV1.CreateFo
 		}
 	}
 
+	s.metrics.FolderCreated()
+
+	s.log.Infof("Folder created: id=%s parent=%v user=%s", folder.ID, req.ParentId, userID)
+
 	return &wardenV1.CreateFolderResponse{
 		Folder: s.folderRepo.ToProto(folder),
 	}, nil
@@ -79,7 +97,7 @@ func (s *FolderService) GetFolder(ctx context.Context, req *wardenV1.GetFolderRe
 		return nil, wardenV1.ErrorAccessDenied("no permission to access this folder")
 	}
 
-	folder, err := s.folderRepo.GetByID(ctx, req.Id)
+	folder, err := s.folderRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +107,7 @@ func (s *FolderService) GetFolder(ctx context.Context, req *wardenV1.GetFolderRe
 
 	var folderProto *wardenV1.Folder
 	if req.IncludeCounts {
-		folderProto, err = s.folderRepo.ToProtoWithCounts(ctx, folder)
+		folderProto, err = s.folderRepo.ToProtoWithCounts(ctx, tenantID, folder)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +141,7 @@ func (s *FolderService) ListFolders(ctx context.Context, req *wardenV1.ListFolde
 		pageSize = *req.PageSize
 	}
 
-	folders, total, err := s.folderRepo.List(ctx, tenantID, req.ParentId, req.NameFilter, page, pageSize)
+	folders, _, err := s.folderRepo.List(ctx, tenantID, req.ParentId, req.NameFilter, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +156,7 @@ func (s *FolderService) ListFolders(ctx context.Context, req *wardenV1.ListFolde
 
 	return &wardenV1.ListFoldersResponse{
 		Folders: accessibleFolders,
-		Total:   uint32(total),
+		Total:   uint32(len(accessibleFolders)),
 	}, nil
 }
 
@@ -152,10 +170,12 @@ func (s *FolderService) UpdateFolder(ctx context.Context, req *wardenV1.UpdateFo
 		return nil, wardenV1.ErrorAccessDenied("no permission to modify this folder")
 	}
 
-	folder, err := s.folderRepo.Update(ctx, req.Id, req.Name, req.Description)
+	folder, err := s.folderRepo.Update(ctx, tenantID, req.Id, req.Name, req.Description)
 	if err != nil {
 		return nil, err
 	}
+
+	s.log.Infof("Folder updated: id=%s user=%s", req.Id, userID)
 
 	return &wardenV1.UpdateFolderResponse{
 		Folder: s.folderRepo.ToProto(folder),
@@ -172,14 +192,54 @@ func (s *FolderService) DeleteFolder(ctx context.Context, req *wardenV1.DeleteFo
 		return nil, wardenV1.ErrorAccessDenied("no permission to delete this folder")
 	}
 
-	if err := s.folderRepo.Delete(ctx, req.Id, req.Force); err != nil {
+	// When force-deleting, clean up Vault data, permissions, and version records
+	// for all secrets and descendant folders before the repo cascade-deletes DB records.
+	if req.Force {
+		secrets, err := s.secretRepo.ListAllInFolderTree(ctx, tenantID, req.Id)
+		if err != nil {
+			s.log.Warnf("Failed to list secrets for cleanup in folder %s: %v", req.Id, err)
+		} else {
+			for _, sec := range secrets {
+				// Q3: Clean up permissions for each secret
+				if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeSecret), sec.ID); err != nil {
+					s.log.Warnf("Failed to delete permissions for secret %s: %v", sec.ID, err)
+				}
+				// Q5: Clean up SecretVersion records
+				if err := s.versionRepo.DeleteBySecretID(ctx, sec.ID); err != nil {
+					s.log.Warnf("Failed to delete versions for secret %s: %v", sec.ID, err)
+				}
+				// Vault cleanup
+				if err := s.kvStore.DestroyAllVersions(ctx, sec.VaultPath); err != nil {
+					s.log.Warnf("Failed to destroy Vault data for secret %s during folder delete: %v", sec.ID, err)
+				}
+			}
+		}
+
+		// Q4: Clean up permissions for descendant folders
+		descendantFolders, err := s.folderRepo.ListDescendantIDs(ctx, tenantID, req.Id)
+		if err != nil {
+			s.log.Warnf("Failed to list descendant folders for permission cleanup in folder %s: %v", req.Id, err)
+		} else {
+			for _, folderID := range descendantFolders {
+				if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeFolder), folderID); err != nil {
+					s.log.Warnf("Failed to delete permissions for descendant folder %s: %v", folderID, err)
+				}
+			}
+		}
+	}
+
+	if err := s.folderRepo.Delete(ctx, tenantID, req.Id, req.Force); err != nil {
 		return nil, err
 	}
 
-	// Delete associated permissions
+	// Delete permissions for the root folder itself
 	if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeFolder), req.Id); err != nil {
 		s.log.Warnf("Failed to delete permissions for folder %s: %v", req.Id, err)
 	}
+
+	s.metrics.FolderDeleted()
+
+	s.log.Infof("Folder deleted: id=%s force=%v user=%s", req.Id, req.Force, userID)
 
 	return &emptypb.Empty{}, nil
 }
@@ -201,10 +261,12 @@ func (s *FolderService) MoveFolder(ctx context.Context, req *wardenV1.MoveFolder
 		}
 	}
 
-	folder, err := s.folderRepo.Move(ctx, req.Id, req.NewParentId)
+	folder, err := s.folderRepo.Move(ctx, tenantID, req.Id, req.NewParentId)
 	if err != nil {
 		return nil, err
 	}
+
+	s.log.Infof("Folder moved: id=%s newParent=%v user=%s", req.Id, req.NewParentId, userID)
 
 	return &wardenV1.MoveFolderResponse{
 		Folder: s.folderRepo.ToProto(folder),

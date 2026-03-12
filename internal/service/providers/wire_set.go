@@ -14,6 +14,7 @@ import (
 	"github.com/google/wire"
 
 	"github.com/go-tangra/go-tangra-warden/internal/client"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
 	"github.com/go-tangra/go-tangra-warden/internal/service"
 )
 
@@ -27,6 +28,7 @@ var ProviderSet = wire.NewSet(
 	service.NewBackupService,
 	service.NewUserService,
 	client.NewAdminClient,
+	metrics.NewCollector,
 	ProvideResourceLookup,
 	ProvidePermissionStore,
 	ProvideAuthzEngine,

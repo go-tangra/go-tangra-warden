@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
@@ -11,10 +14,17 @@ import (
 	"github.com/go-tangra/go-tangra-warden/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
 	"github.com/go-tangra/go-tangra-warden/pkg/vault"
 
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
 )
+
+// passwordAccessEntry tracks the last password access time for rate limiting.
+type passwordAccessEntry struct {
+	lastAccess time.Time
+	count      int
+}
 
 type SecretService struct {
 	wardenV1.UnimplementedWardenSecretServiceServer
@@ -26,6 +36,12 @@ type SecretService struct {
 	permRepo    *data.PermissionRepo
 	kvStore     *vault.KVStore
 	checker     *authz.Checker
+	metrics     *metrics.Collector
+
+	// Rate limiter for password access: key = "userID:secretID"
+	pwAccessMu    sync.Mutex
+	pwAccessCache map[string]*passwordAccessEntry
+	stopCh        chan struct{} // signals the cleanup goroutine to stop
 }
 
 func NewSecretService(
@@ -36,15 +52,79 @@ func NewSecretService(
 	permRepo *data.PermissionRepo,
 	kvStore *vault.KVStore,
 	checker *authz.Checker,
+	metrics *metrics.Collector,
 ) *SecretService {
-	return &SecretService{
-		log:         ctx.NewLoggerHelper("warden/service/secret"),
-		secretRepo:  secretRepo,
-		versionRepo: versionRepo,
-		folderRepo:  folderRepo,
-		permRepo:    permRepo,
-		kvStore:     kvStore,
-		checker:     checker,
+	svc := &SecretService{
+		log:           ctx.NewLoggerHelper("warden/service/secret"),
+		secretRepo:    secretRepo,
+		versionRepo:   versionRepo,
+		folderRepo:    folderRepo,
+		permRepo:      permRepo,
+		kvStore:       kvStore,
+		checker:       checker,
+		pwAccessCache: make(map[string]*passwordAccessEntry),
+		metrics:       metrics,
+		stopCh:        make(chan struct{}),
+	}
+
+	// Periodically clean up stale rate-limit entries to prevent unbounded growth.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				svc.sweepStaleRateLimitEntries()
+			case <-svc.stopCh:
+				return
+			}
+		}
+	}()
+
+	return svc
+}
+
+// Close stops background goroutines. Call from the Wire cleanup chain.
+func (s *SecretService) Close() {
+	close(s.stopCh)
+}
+
+const (
+	pwRateLimitWindow = 1 * time.Minute
+	pwRateLimitMax    = 30
+)
+
+// checkPasswordAccessRate enforces per-user per-secret rate limiting on password retrieval.
+func (s *SecretService) checkPasswordAccessRate(userID, secretID string) error {
+	key := userID + ":" + secretID
+	now := time.Now()
+
+	s.pwAccessMu.Lock()
+	defer s.pwAccessMu.Unlock()
+
+	entry, exists := s.pwAccessCache[key]
+	if !exists || now.Sub(entry.lastAccess) > pwRateLimitWindow {
+		s.pwAccessCache[key] = &passwordAccessEntry{lastAccess: now, count: 1}
+		return nil
+	}
+
+	entry.count++
+	if entry.count > pwRateLimitMax {
+		s.log.Warnf("Password access rate limit exceeded: user=%s secret=%s count=%d", userID, secretID, entry.count)
+		return wardenV1.ErrorBadRequest("too many password access requests, please try again later")
+	}
+	return nil
+}
+
+// sweepStaleRateLimitEntries removes entries older than the rate-limit window.
+func (s *SecretService) sweepStaleRateLimitEntries() {
+	s.pwAccessMu.Lock()
+	defer s.pwAccessMu.Unlock()
+	now := time.Now()
+	for key, entry := range s.pwAccessCache {
+		if now.Sub(entry.lastAccess) > pwRateLimitWindow {
+			delete(s.pwAccessCache, key)
+		}
 	}
 }
 
@@ -64,10 +144,10 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 	secretID := generateUUID()
 	vaultPath := s.kvStore.BuildPath(tenantID, secretID)
 
-	// Store password in Vault
+	// Store password in Vault (log full error server-side, return sanitized message)
 	_, err := s.kvStore.StorePassword(ctx, vaultPath, req.Password, nil)
 	if err != nil {
-		s.log.Errorf("failed to store password in Vault: %v", err)
+		s.log.Errorf("failed to store password in Vault for path %s: %v", vaultPath, err)
 		return nil, wardenV1.ErrorVaultOperationError("failed to store password")
 	}
 
@@ -92,14 +172,22 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 	checksum := vault.CalculateChecksum(req.Password)
 	_, err = s.versionRepo.Create(ctx, secretEntity.ID, 1, vaultPath, req.VersionComment, checksum, createdBy)
 	if err != nil {
-		s.log.Warnf("failed to create version record: %v", err)
+		s.log.Errorf("failed to create version record for secret %s: %v", secretEntity.ID, err)
+		// Clean up: delete the DB secret and Vault data on version creation failure
+		if delErr := s.secretRepo.Delete(ctx, tenantID, secretEntity.ID, true); delErr != nil {
+			s.log.Warnf("failed to clean up secret after version creation failure: %v", delErr)
+		}
+		if cleanupErr := s.kvStore.DestroyAllVersions(ctx, vaultPath); cleanupErr != nil {
+			s.log.Warnf("failed to clean up Vault after version creation failure: %v", cleanupErr)
+		}
+		return nil, wardenV1.ErrorInternalServerError("failed to create secret version")
 	}
 
 	// Grant owner permission to creator
 	if createdBy != nil {
 		_, err = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secretEntity.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil)
 		if err != nil {
-			s.log.Warnf("failed to grant owner permission: %v", err)
+			s.log.Errorf("failed to grant owner permission for secret %s: %v", secretEntity.ID, err)
 		}
 	}
 
@@ -120,6 +208,10 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 		}
 	}
 
+	s.metrics.SecretCreated(string(secret.StatusSECRET_STATUS_ACTIVE))
+
+	s.log.Infof("Secret created: id=%s folder=%v user=%s", secretEntity.ID, req.FolderId, userID)
+
 	return &wardenV1.CreateSecretResponse{
 		Secret: s.secretRepo.ToProto(secretEntity),
 	}, nil
@@ -135,7 +227,7 @@ func (s *SecretService) GetSecret(ctx context.Context, req *wardenV1.GetSecretRe
 		return nil, wardenV1.ErrorAccessDenied("no permission to access this secret")
 	}
 
-	secretEntity, err := s.secretRepo.GetByID(ctx, req.Id)
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +250,7 @@ func (s *SecretService) GetSecretPassword(ctx context.Context, req *wardenV1.Get
 		return nil, wardenV1.ErrorAccessDenied("no permission to access this secret")
 	}
 
-	secretEntity, err := s.secretRepo.GetByID(ctx, req.Id)
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -166,12 +258,20 @@ func (s *SecretService) GetSecretPassword(ctx context.Context, req *wardenV1.Get
 		return nil, wardenV1.ErrorSecretNotFound("secret not found")
 	}
 
+	// Rate limit password access: max 30 requests per user per secret per minute
+	if err := s.checkPasswordAccessRate(userID, req.Id); err != nil {
+		return nil, err
+	}
+
+	// Audit: log password access (ID only, no name to minimize info disclosure in logs)
+	s.log.Infof("Password access: user=%s secret=%s", userID, req.Id)
+
 	var password string
 	var version int
 
 	if req.Version != nil && *req.Version > 0 {
 		// Get specific version
-		versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, req.Id, *req.Version)
+		versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, tenantID, req.Id, *req.Version)
 		if err != nil {
 			return nil, err
 		}
@@ -180,6 +280,7 @@ func (s *SecretService) GetSecretPassword(ctx context.Context, req *wardenV1.Get
 		}
 		password, err = s.kvStore.GetPasswordVersion(ctx, secretEntity.VaultPath, int(*req.Version))
 		if err != nil {
+			s.log.Errorf("failed to get password version %d from Vault: %v", *req.Version, err)
 			return nil, wardenV1.ErrorVaultOperationError("failed to retrieve password")
 		}
 		version = int(*req.Version)
@@ -187,6 +288,7 @@ func (s *SecretService) GetSecretPassword(ctx context.Context, req *wardenV1.Get
 		// Get current version
 		password, version, err = s.kvStore.GetPassword(ctx, secretEntity.VaultPath)
 		if err != nil {
+			s.log.Errorf("failed to get password from Vault: %v", err)
 			return nil, wardenV1.ErrorVaultOperationError("failed to retrieve password")
 		}
 	}
@@ -224,7 +326,7 @@ func (s *SecretService) ListSecrets(ctx context.Context, req *wardenV1.ListSecre
 		status = &s
 	}
 
-	secrets, total, err := s.secretRepo.List(ctx, tenantID, req.FolderId, status, req.NameFilter, page, pageSize)
+	secrets, _, err := s.secretRepo.List(ctx, tenantID, req.FolderId, status, req.NameFilter, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +341,7 @@ func (s *SecretService) ListSecrets(ctx context.Context, req *wardenV1.ListSecre
 
 	return &wardenV1.ListSecretsResponse{
 		Secrets: accessibleSecrets,
-		Total:   uint32(total),
+		Total:   uint32(len(accessibleSecrets)),
 	}, nil
 }
 
@@ -264,11 +366,29 @@ func (s *SecretService) UpdateSecret(ctx context.Context, req *wardenV1.UpdateSe
 		status = &s
 	}
 
+	// Capture old status for metrics tracking
+	var oldStatus secret.Status
+	if status != nil {
+		existing, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			oldStatus = existing.Status
+		}
+	}
+
 	updatedBy := getUserIDAsUint32(ctx)
-	secretEntity, err := s.secretRepo.Update(ctx, req.Id, req.Name, req.Username, req.HostUrl, req.Description, metadata, status, updatedBy)
+	secretEntity, err := s.secretRepo.Update(ctx, tenantID, req.Id, req.Name, req.Username, req.HostUrl, req.Description, metadata, status, updatedBy)
 	if err != nil {
 		return nil, err
 	}
+
+	if status != nil && oldStatus != *status {
+		s.metrics.SecretStatusChanged(string(oldStatus), string(*status))
+	}
+
+	s.log.Infof("Secret updated: id=%s user=%s", req.Id, userID)
 
 	return &wardenV1.UpdateSecretResponse{
 		Secret: s.secretRepo.ToProto(secretEntity),
@@ -285,7 +405,7 @@ func (s *SecretService) UpdateSecretPassword(ctx context.Context, req *wardenV1.
 		return nil, wardenV1.ErrorAccessDenied("no permission to modify this secret")
 	}
 
-	secretEntity, err := s.secretRepo.GetByID(ctx, req.Id)
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -304,14 +424,19 @@ func (s *SecretService) UpdateSecretPassword(ctx context.Context, req *wardenV1.
 	checksum := vault.CalculateChecksum(req.Password)
 	versionEntity, err := s.versionRepo.Create(ctx, secretEntity.ID, int32(newVersion), secretEntity.VaultPath, req.Comment, checksum, createdBy)
 	if err != nil {
-		s.log.Warnf("failed to create version record: %v", err)
+		s.log.Errorf("failed to create version record for secret %s: %v", secretEntity.ID, err)
+		return nil, wardenV1.ErrorInternalServerError("failed to create version record")
 	}
 
 	// Update secret's current version
-	secretEntity, err = s.secretRepo.UpdateVersion(ctx, req.Id, int32(newVersion), createdBy)
+	secretEntity, err = s.secretRepo.UpdateVersion(ctx, tenantID, req.Id, int32(newVersion), createdBy)
 	if err != nil {
 		return nil, err
 	}
+
+	s.metrics.SecretVersionCreated()
+
+	s.log.Infof("Secret password updated: id=%s version=%d user=%s", req.Id, newVersion, userID)
 
 	return &wardenV1.UpdateSecretPasswordResponse{
 		Secret:  s.secretRepo.ToProto(secretEntity),
@@ -329,7 +454,7 @@ func (s *SecretService) DeleteSecret(ctx context.Context, req *wardenV1.DeleteSe
 		return nil, wardenV1.ErrorAccessDenied("no permission to delete this secret")
 	}
 
-	secretEntity, err := s.secretRepo.GetByID(ctx, req.Id)
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +474,7 @@ func (s *SecretService) DeleteSecret(ctx context.Context, req *wardenV1.DeleteSe
 		}
 	}
 
-	if err := s.secretRepo.Delete(ctx, req.Id, req.Permanent); err != nil {
+	if err := s.secretRepo.Delete(ctx, tenantID, req.Id, req.Permanent); err != nil {
 		return nil, err
 	}
 
@@ -357,6 +482,10 @@ func (s *SecretService) DeleteSecret(ctx context.Context, req *wardenV1.DeleteSe
 	if err := s.permRepo.DeleteByResource(ctx, tenantID, string(authz.ResourceTypeSecret), req.Id); err != nil {
 		s.log.Warnf("Failed to delete permissions for secret %s: %v", req.Id, err)
 	}
+
+	s.metrics.SecretDeleted(string(secretEntity.Status))
+
+	s.log.Infof("Secret deleted: id=%s permanent=%v user=%s", req.Id, req.Permanent, userID)
 
 	return &emptypb.Empty{}, nil
 }
@@ -379,10 +508,12 @@ func (s *SecretService) MoveSecret(ctx context.Context, req *wardenV1.MoveSecret
 	}
 
 	updatedBy := getUserIDAsUint32(ctx)
-	secretEntity, err := s.secretRepo.Move(ctx, req.Id, req.NewFolderId, updatedBy)
+	secretEntity, err := s.secretRepo.Move(ctx, tenantID, req.Id, req.NewFolderId, updatedBy)
 	if err != nil {
 		return nil, err
 	}
+
+	s.log.Infof("Secret moved: id=%s newFolder=%v user=%s", req.Id, req.NewFolderId, userID)
 
 	return &wardenV1.MoveSecretResponse{
 		Secret: s.secretRepo.ToProto(secretEntity),
@@ -408,7 +539,7 @@ func (s *SecretService) ListVersions(ctx context.Context, req *wardenV1.ListVers
 		pageSize = *req.PageSize
 	}
 
-	versions, total, err := s.versionRepo.List(ctx, req.SecretId, page, pageSize)
+	versions, total, err := s.versionRepo.List(ctx, tenantID, req.SecretId, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +565,7 @@ func (s *SecretService) GetVersion(ctx context.Context, req *wardenV1.GetVersion
 		return nil, wardenV1.ErrorAccessDenied("no permission to access this secret")
 	}
 
-	versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, req.SecretId, req.VersionNumber)
+	versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, tenantID, req.SecretId, req.VersionNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -447,6 +578,9 @@ func (s *SecretService) GetVersion(ctx context.Context, req *wardenV1.GetVersion
 	}
 
 	if req.IncludePassword {
+		if err := s.checkPasswordAccessRate(userID, req.SecretId); err != nil {
+			return nil, err
+		}
 		password, err := s.kvStore.GetPasswordVersion(ctx, versionEntity.VaultPath, int(req.VersionNumber))
 		if err != nil {
 			s.log.Warnf("failed to get password from Vault: %v", err)
@@ -468,7 +602,7 @@ func (s *SecretService) RestoreVersion(ctx context.Context, req *wardenV1.Restor
 		return nil, wardenV1.ErrorAccessDenied("no permission to modify this secret")
 	}
 
-	secretEntity, err := s.secretRepo.GetByID(ctx, req.SecretId)
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.SecretId)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +611,7 @@ func (s *SecretService) RestoreVersion(ctx context.Context, req *wardenV1.Restor
 	}
 
 	// Get the version to restore
-	versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, req.SecretId, req.VersionNumber)
+	versionEntity, err := s.versionRepo.GetBySecretAndVersion(ctx, tenantID, req.SecretId, req.VersionNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -501,19 +635,24 @@ func (s *SecretService) RestoreVersion(ctx context.Context, req *wardenV1.Restor
 	createdBy := getUserIDAsUint32(ctx)
 	comment := req.Comment
 	if comment == "" {
-		comment = "Restored from version " + string(rune(req.VersionNumber))
+		comment = fmt.Sprintf("Restored from version %d", req.VersionNumber)
 	}
 	checksum := vault.CalculateChecksum(password)
 	newVersionEntity, err := s.versionRepo.Create(ctx, secretEntity.ID, int32(newVersion), secretEntity.VaultPath, comment, checksum, createdBy)
 	if err != nil {
-		s.log.Warnf("failed to create version record: %v", err)
+		s.log.Errorf("failed to create version record for secret %s: %v", secretEntity.ID, err)
+		return nil, wardenV1.ErrorInternalServerError("failed to create version record")
 	}
 
 	// Update secret's current version
-	secretEntity, err = s.secretRepo.UpdateVersion(ctx, req.SecretId, int32(newVersion), createdBy)
+	secretEntity, err = s.secretRepo.UpdateVersion(ctx, tenantID, req.SecretId, int32(newVersion), createdBy)
 	if err != nil {
 		return nil, err
 	}
+
+	s.metrics.SecretVersionCreated()
+
+	s.log.Infof("Secret version restored: secret=%s fromVersion=%d newVersion=%d user=%s", req.SecretId, req.VersionNumber, newVersion, userID)
 
 	return &wardenV1.RestoreVersionResponse{
 		Secret:     s.secretRepo.ToProto(secretEntity),
@@ -541,7 +680,7 @@ func (s *SecretService) SearchSecrets(ctx context.Context, req *wardenV1.SearchS
 		status = &s
 	}
 
-	secrets, total, err := s.secretRepo.Search(ctx, tenantID, req.Query, req.FolderId, req.IncludeSubfolders, status, page, pageSize)
+	secrets, _, err := s.secretRepo.Search(ctx, tenantID, req.Query, req.FolderId, req.IncludeSubfolders, status, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +695,7 @@ func (s *SecretService) SearchSecrets(ctx context.Context, req *wardenV1.SearchS
 
 	return &wardenV1.SearchSecretsResponse{
 		Secrets: accessibleSecrets,
-		Total:   uint32(total),
+		Total:   uint32(len(accessibleSecrets)),
 	}, nil
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/go-tangra/go-tangra-warden/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
 	"github.com/go-tangra/go-tangra-warden/pkg/vault"
 
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
@@ -30,6 +31,7 @@ type BitwardenTransferService struct {
 	permRepo    *data.PermissionRepo
 	kvStore     *vault.KVStore
 	checker     *authz.Checker
+	metrics     *metrics.Collector
 }
 
 // NewBitwardenTransferService creates a new BitwardenTransferService
@@ -41,6 +43,7 @@ func NewBitwardenTransferService(
 	permRepo *data.PermissionRepo,
 	kvStore *vault.KVStore,
 	checker *authz.Checker,
+	metrics *metrics.Collector,
 ) *BitwardenTransferService {
 	return &BitwardenTransferService{
 		log:         ctx.NewLoggerHelper("warden/service/bitwarden-transfer"),
@@ -50,6 +53,7 @@ func NewBitwardenTransferService(
 		permRepo:    permRepo,
 		kvStore:     kvStore,
 		checker:     checker,
+		metrics:     metrics,
 	}
 }
 
@@ -241,9 +245,9 @@ func (s *BitwardenTransferService) ExportToBitwarden(ctx context.Context, req *w
 		itemsExported++
 	}
 
-	// Export folders
+	// Export folders (tenant-scoped)
 	for folderID := range folderIDSet {
-		folder, err := s.folderRepo.GetByID(ctx, folderID)
+		folder, err := s.folderRepo.GetByIDAndTenant(ctx, tenantID, folderID)
 		if err != nil || folder == nil {
 			continue
 		}
@@ -280,7 +284,8 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 	// Parse JSON
 	var export bitwardenExportJSON
 	if err := json.Unmarshal([]byte(req.JsonData), &export); err != nil {
-		return nil, wardenV1.ErrorInvalidFormat("invalid JSON format: " + err.Error())
+		s.log.Errorf("failed to parse Bitwarden JSON: %v", err)
+		return nil, wardenV1.ErrorInvalidFormat("invalid JSON format")
 	}
 
 	// Normalize organization exports (collections -> folders)
@@ -313,7 +318,7 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 		// Resolve target folder's path prefix for correct DB path lookups
 		var targetPathPrefix string
 		if req.TargetFolderId != nil && *req.TargetFolderId != "" {
-			targetFolder, err := s.folderRepo.GetByID(ctx, *req.TargetFolderId)
+			targetFolder, err := s.folderRepo.GetByIDAndTenant(ctx, tenantID, *req.TargetFolderId)
 			if err == nil && targetFolder != nil {
 				targetPathPrefix = targetFolder.Path
 			}
@@ -355,11 +360,12 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 				// Try to find existing folder by its DB path
 				folder, err := s.folderRepo.GetByTenantAndPath(ctx, tenantID, dbPath)
 				if err != nil {
+					s.log.Errorf("folder lookup failed for %s: %v", bwFolder.ID, err)
 					resp.Errors = append(resp.Errors, &wardenV1.ImportError{
 						BitwardenId: bwFolder.ID,
 						ItemName:    bwFolder.Name,
 						ErrorType:   "folder_lookup",
-						Message:     err.Error(),
+						Message:     "failed to look up existing folder",
 					})
 					failed = true
 					break
@@ -376,11 +382,12 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 				// Create the folder
 				folder, err = s.folderRepo.Create(ctx, tenantID, currentParentID, segment, "", createdBy)
 				if err != nil {
+					s.log.Errorf("folder creation failed for %s: %v", bwFolder.ID, err)
 					resp.Errors = append(resp.Errors, &wardenV1.ImportError{
 						BitwardenId: bwFolder.ID,
 						ItemName:    bwFolder.Name,
 						ErrorType:   "folder_creation",
-						Message:     err.Error(),
+						Message:     "failed to create folder",
 					})
 					failed = true
 					break
@@ -390,6 +397,7 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 				currentParentID = &folder.ID
 				leafFolderID = folder.ID
 				resp.FoldersCreated++
+				s.metrics.FolderCreated()
 
 				// Grant owner permission on newly created folder
 				if createdBy != nil {
@@ -409,11 +417,17 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 		}
 	}
 
-	// Get existing secret names for duplicate detection
+	// Get existing secret names for duplicate detection (and IDs/paths for overwrite)
 	existingNames := make(map[string]bool)
-	existingSecrets, _ := s.secretRepo.ListAll(ctx, tenantID)
+	existingSecretsByName := make(map[string]*data.SecretInfo) // for overwrite lookups
+	existingSecrets, err := s.secretRepo.ListAll(ctx, tenantID)
+	if err != nil {
+		return nil, wardenV1.ErrorInternalServerError("failed to list existing secrets for duplicate detection")
+	}
 	for _, sec := range existingSecrets {
-		existingNames[strings.ToLower(sec.Name)] = true
+		nameLower := strings.ToLower(sec.Name)
+		existingNames[nameLower] = true
+		existingSecretsByName[nameLower] = &data.SecretInfo{ID: sec.ID, VaultPath: sec.VaultPath}
 	}
 
 	// Import items
@@ -458,19 +472,52 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 				resp.ItemsSkipped++
 				continue
 			case wardenV1.DuplicateHandling_DUPLICATE_HANDLING_RENAME:
-				// Find unique name
-				counter := 1
-				for existingNames[strings.ToLower(name)] {
+				// Find unique name (bounded to prevent infinite loop)
+				const maxRenameAttempts = 1000
+				for counter := 1; counter <= maxRenameAttempts; counter++ {
 					name = fmt.Sprintf("%s (%d)", bwItem.Name, counter)
-					counter++
+					if !existingNames[strings.ToLower(name)] {
+						break
+					}
 				}
 			case wardenV1.DuplicateHandling_DUPLICATE_HANDLING_OVERWRITE:
-				// TODO: Implement overwrite logic
-				// For now, treat as rename
-				counter := 1
-				for existingNames[strings.ToLower(name)] {
-					name = fmt.Sprintf("%s (%d)", bwItem.Name, counter)
-					counter++
+				// Delete existing secret so the import replaces it
+				if existing, ok := existingSecretsByName[nameLower]; ok {
+					// Check delete permission on existing secret
+					if err := s.checker.CanDeleteSecret(ctx, tenantID, userID, existing.ID); err != nil {
+						resp.Errors = append(resp.Errors, &wardenV1.ImportError{
+							BitwardenId: bwItem.ID,
+							ItemName:    bwItem.Name,
+							ErrorType:   "access_denied",
+							Message:     "no permission to overwrite existing secret",
+						})
+						resp.ItemsFailed++
+						continue
+					}
+					// Clean up Vault data
+					if delVaultErr := s.kvStore.DestroyAllVersions(ctx, existing.VaultPath); delVaultErr != nil {
+						s.log.Warnf("failed to destroy Vault data for overwrite of secret %s: %v", existing.ID, delVaultErr)
+					}
+					// Clean up permissions and version records for the existing secret
+					if permErr := s.permRepo.DeleteByResource(ctx, tenantID, "secret", existing.ID); permErr != nil {
+						s.log.Warnf("failed to delete permissions for overwritten secret %s: %v", existing.ID, permErr)
+					}
+					if verErr := s.versionRepo.DeleteBySecretID(ctx, existing.ID); verErr != nil {
+						s.log.Warnf("failed to delete versions for overwritten secret %s: %v", existing.ID, verErr)
+					}
+					if delErr := s.secretRepo.Delete(ctx, tenantID, existing.ID, true); delErr != nil {
+						s.log.Errorf("failed to delete existing secret for overwrite: %v", delErr)
+						resp.Errors = append(resp.Errors, &wardenV1.ImportError{
+							BitwardenId: bwItem.ID,
+							ItemName:    bwItem.Name,
+							ErrorType:   "overwrite_error",
+							Message:     "failed to delete existing secret for overwrite",
+						})
+						resp.ItemsFailed++
+						continue
+					}
+					delete(existingNames, nameLower)
+					delete(existingSecretsByName, nameLower)
 				}
 			}
 		}
@@ -487,7 +534,7 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 		// Extract host URL
 		hostURL := ""
-		if bwItem.Login.URIs != nil && len(bwItem.Login.URIs) > 0 {
+		if len(bwItem.Login.URIs) > 0 {
 			hostURL = bwItem.Login.URIs[0].URI
 		}
 
@@ -513,28 +560,30 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 		// Store password in Vault
 		_, err := s.kvStore.StorePassword(ctx, vaultPath, bwItem.Login.Password, nil)
 		if err != nil {
+			s.log.Errorf("failed to store password in Vault for import item %s: %v", bwItem.ID, err)
 			resp.Errors = append(resp.Errors, &wardenV1.ImportError{
 				BitwardenId: bwItem.ID,
 				ItemName:    bwItem.Name,
 				ErrorType:   "vault_error",
-				Message:     "failed to store password in vault: " + err.Error(),
+				Message:     "failed to store password in vault",
 			})
 			resp.ItemsFailed++
 			continue
 		}
 
 		// Create secret in database
-		secret, err := s.secretRepo.Create(ctx, tenantID, targetFolderID, name, bwItem.Login.Username, hostURL, vaultPath, description, metadata, createdBy)
+		secretEntity, err := s.secretRepo.Create(ctx, tenantID, targetFolderID, name, bwItem.Login.Username, hostURL, vaultPath, description, metadata, createdBy)
 		if err != nil {
 			// Cleanup Vault on failure
 			if cleanupErr := s.kvStore.DestroyAllVersions(ctx, vaultPath); cleanupErr != nil {
 				s.log.Warnf("Failed to clean up Vault path %s after import failure: %v", vaultPath, cleanupErr)
 			}
+			s.log.Errorf("secret creation failed for %s: %v", bwItem.ID, err)
 			resp.Errors = append(resp.Errors, &wardenV1.ImportError{
 				BitwardenId: bwItem.ID,
 				ItemName:    bwItem.Name,
 				ErrorType:   "creation_error",
-				Message:     err.Error(),
+				Message:     "failed to create secret",
 			})
 			resp.ItemsFailed++
 			continue
@@ -542,21 +591,23 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 		// Create initial version record
 		checksum := vault.CalculateChecksum(bwItem.Login.Password)
-		if _, versionErr := s.versionRepo.Create(ctx, secret.ID, 1, vaultPath, "Imported from Bitwarden", checksum, createdBy); versionErr != nil {
-			s.log.Warnf("Failed to create version record for imported secret %s: %v", secret.ID, versionErr)
+		if _, versionErr := s.versionRepo.Create(ctx, secretEntity.ID, 1, vaultPath, "Imported from Bitwarden", checksum, createdBy); versionErr != nil {
+			s.log.Warnf("Failed to create version record for imported secret %s: %v", secretEntity.ID, versionErr)
 		}
 
 		// Grant owner permission
 		if createdBy != nil {
-			if _, permErr := s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secret.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil); permErr != nil {
-				s.log.Warnf("Failed to grant owner permission on imported secret %s: %v", secret.ID, permErr)
+			if _, permErr := s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secretEntity.ID, string(authz.RelationOwner), string(authz.SubjectTypeUser), userID, createdBy, nil); permErr != nil {
+				s.log.Warnf("Failed to grant owner permission on imported secret %s: %v", secretEntity.ID, permErr)
 			}
 		}
 
 		// Apply import permission rules
-		s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeSecret, secret.ID, req.PermissionRules, createdBy)
+		s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeSecret, secretEntity.ID, req.PermissionRules, createdBy)
 
-		resp.ItemIdMapping[bwItem.ID] = secret.ID
+		s.metrics.SecretCreated(string(secretEntity.Status))
+
+		resp.ItemIdMapping[bwItem.ID] = secretEntity.ID
 		existingNames[strings.ToLower(name)] = true
 		resp.ItemsImported++
 	}
@@ -600,8 +651,9 @@ func (s *BitwardenTransferService) ValidateBitwardenImport(ctx context.Context, 
 	// Parse JSON
 	var export bitwardenExportJSON
 	if err := json.Unmarshal([]byte(req.JsonData), &export); err != nil {
+		s.log.Errorf("Bitwarden validation: invalid JSON: %v", err)
 		resp.IsValid = false
-		resp.Errors = append(resp.Errors, "Invalid JSON format: "+err.Error())
+		resp.Errors = append(resp.Errors, "Invalid JSON format")
 		return resp, nil
 	}
 
@@ -633,7 +685,12 @@ func (s *BitwardenTransferService) ValidateBitwardenImport(ctx context.Context, 
 
 	// Get existing secret names for duplicate detection
 	existingNames := make(map[string]bool)
-	existingSecrets, _ := s.secretRepo.ListAll(ctx, tenantID)
+	existingSecrets, err := s.secretRepo.ListAll(ctx, tenantID)
+	if err != nil {
+		resp.IsValid = false
+		resp.Errors = append(resp.Errors, "failed to list existing secrets for duplicate detection")
+		return resp, nil
+	}
 	for _, sec := range existingSecrets {
 		existingNames[strings.ToLower(sec.Name)] = true
 	}

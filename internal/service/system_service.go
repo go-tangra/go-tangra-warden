@@ -55,10 +55,13 @@ func (s *SystemService) Health(ctx context.Context, _ *emptypb.Empty) (*wardenV1
 	}
 
 	if s.vaultClient != nil {
-		health, err := s.vaultClient.Health(ctx)
-		if err != nil {
+		if s.vaultClient.IsTokenRenewalFailed() {
 			vaultHealth.Status = wardenV1.HealthStatus_HEALTH_STATUS_UNHEALTHY
-			vaultHealth.Message = err.Error()
+			vaultHealth.Message = "Vault token renewal failed"
+		} else if health, err := s.vaultClient.Health(ctx); err != nil {
+			vaultHealth.Status = wardenV1.HealthStatus_HEALTH_STATUS_UNHEALTHY
+			s.log.Errorf("Vault health check failed: %v", err)
+			vaultHealth.Message = "Vault connection error"
 		} else if health.Sealed {
 			vaultHealth.Status = wardenV1.HealthStatus_HEALTH_STATUS_DEGRADED
 			vaultHealth.Message = "Vault is sealed"
@@ -105,7 +108,11 @@ func (s *SystemService) GetInfo(ctx context.Context, _ *emptypb.Empty) (*wardenV
 // GetStats returns statistics for the dashboard
 func (s *SystemService) GetStats(ctx context.Context, req *wardenV1.GetStatsRequest) (*wardenV1.GetStatsResponse, error) {
 	tenantID := getTenantIDFromContext(ctx)
-	if req.TenantId != nil {
+	// Only platform admins may view stats for a different tenant
+	if req.TenantId != nil && *req.TenantId != tenantID {
+		if !isPlatformAdmin(ctx) {
+			return nil, wardenV1.ErrorAccessDenied("cannot view stats for another tenant")
+		}
 		tenantID = *req.TenantId
 	}
 
@@ -165,13 +172,23 @@ func (s *SystemService) CheckVault(ctx context.Context, _ *emptypb.Empty) (*ward
 		}, nil
 	}
 
-	health, err := s.vaultClient.Health(ctx)
-	if err != nil {
+	if s.vaultClient.IsTokenRenewalFailed() {
 		return &wardenV1.CheckVaultResponse{
 			Connected:    false,
 			VaultVersion: "",
 			Sealed:       true,
-			Message:      err.Error(),
+			Message:      "Vault token renewal failed",
+		}, nil
+	}
+
+	health, err := s.vaultClient.Health(ctx)
+	if err != nil {
+		s.log.Errorf("Vault health check failed: %v", err)
+		return &wardenV1.CheckVaultResponse{
+			Connected:    false,
+			VaultVersion: "",
+			Sealed:       true,
+			Message:      "Vault connection error",
 		}, nil
 	}
 

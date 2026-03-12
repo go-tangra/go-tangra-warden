@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
@@ -53,9 +54,9 @@ func (s *PermissionService) GrantAccess(ctx context.Context, req *wardenV1.Grant
 		return nil, wardenV1.ErrorAccessDenied("no permission to share this resource")
 	}
 
-	// Verify the resource exists
+	// Verify the resource exists (tenant-scoped)
 	if req.ResourceType == wardenV1.ResourceType_RESOURCE_TYPE_FOLDER {
-		folder, err := s.folderRepo.GetByID(ctx, req.ResourceId)
+		folder, err := s.folderRepo.GetByIDAndTenant(ctx, tenantID, req.ResourceId)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +64,7 @@ func (s *PermissionService) GrantAccess(ctx context.Context, req *wardenV1.Grant
 			return nil, wardenV1.ErrorFolderNotFound("folder not found")
 		}
 	} else if req.ResourceType == wardenV1.ResourceType_RESOURCE_TYPE_SECRET {
-		secret, err := s.secretRepo.GetByID(ctx, req.ResourceId)
+		secret, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.ResourceId)
 		if err != nil {
 			return nil, err
 		}
@@ -73,14 +74,11 @@ func (s *PermissionService) GrantAccess(ctx context.Context, req *wardenV1.Grant
 	}
 
 	grantedBy := getUserIDAsUint32(ctx)
-	var expiresAt *int64
+	var expiresAt *time.Time
 	if req.ExpiresAt != nil {
-		t := req.ExpiresAt.AsTime().Unix()
+		t := req.ExpiresAt.AsTime()
 		expiresAt = &t
 	}
-
-	// TODO: Convert expiresAt to time.Time for permRepo.Create
-	_ = expiresAt
 
 	permission, err := s.permRepo.Create(
 		ctx,
@@ -91,11 +89,14 @@ func (s *PermissionService) GrantAccess(ctx context.Context, req *wardenV1.Grant
 		string(mapProtoSubjectTypeToAuthz(req.SubjectType)),
 		req.SubjectId,
 		grantedBy,
-		nil, // TODO: Convert expiresAt
+		expiresAt,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	s.log.Infof("Access granted: resource=%s/%s relation=%s subject=%s/%s user=%s",
+		req.ResourceType, req.ResourceId, req.Relation, req.SubjectType, req.SubjectId, userID)
 
 	return &wardenV1.GrantAccessResponse{
 		Permission: s.permRepo.ToProto(permission),
@@ -132,6 +133,9 @@ func (s *PermissionService) RevokeAccess(ctx context.Context, req *wardenV1.Revo
 		return nil, err
 	}
 
+	s.log.Infof("Access revoked: resource=%s/%s subject=%s/%s user=%s",
+		req.ResourceType, req.ResourceId, req.SubjectType, req.SubjectId, userID)
+
 	return &emptypb.Empty{}, nil
 }
 
@@ -140,12 +144,15 @@ func (s *PermissionService) ListPermissions(ctx context.Context, req *wardenV1.L
 	tenantID := getTenantIDFromContext(ctx)
 	userID := getUserIDFromContext(ctx)
 
-	// If resource is specified, check permission
+	// If resource is specified, check permission on that resource.
+	// If no resource is specified, require platform admin (prevents enumerating all tenant permissions).
 	if req.ResourceId != nil && *req.ResourceId != "" && req.ResourceType != nil {
 		resourceType := mapProtoResourceTypeToAuthz(*req.ResourceType)
 		if err := s.checker.RequirePermission(ctx, tenantID, userID, resourceType, *req.ResourceId, authz.PermissionRead); err != nil {
 			return nil, wardenV1.ErrorAccessDenied("no permission to view permissions on this resource")
 		}
+	} else if !isPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("resource_id and resource_type are required")
 	}
 
 	page := uint32(1)
@@ -185,13 +192,20 @@ func (s *PermissionService) ListPermissions(ctx context.Context, req *wardenV1.L
 
 	return &wardenV1.ListPermissionsResponse{
 		Permissions: protoPermissions,
-		Total:       uint32(len(protoPermissions)),
+		Total:       uint32(len(protoPermissions)), // Post-filter count reflects accessible permissions
 	}, nil
 }
 
-// CheckAccess checks if a subject has access to a resource
+// CheckAccess checks if a subject has access to a resource.
+// Users can only check their own permissions unless they are platform admins.
 func (s *PermissionService) CheckAccess(ctx context.Context, req *wardenV1.CheckAccessRequest) (*wardenV1.CheckAccessResponse, error) {
 	tenantID := getTenantIDFromContext(ctx)
+	callerID := getUserIDFromContext(ctx)
+
+	// Only allow checking another user's permissions if caller is platform admin
+	if req.UserId != callerID && !isPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("cannot check permissions for another user")
+	}
 
 	allowed, reason := s.checker.CheckPermission(
 		ctx,
@@ -208,9 +222,15 @@ func (s *PermissionService) CheckAccess(ctx context.Context, req *wardenV1.Check
 	}, nil
 }
 
-// ListAccessibleResources lists resources accessible by a subject
+// ListAccessibleResources lists resources accessible by a subject.
+// Users can only query their own accessible resources unless they are platform admins.
 func (s *PermissionService) ListAccessibleResources(ctx context.Context, req *wardenV1.ListAccessibleResourcesRequest) (*wardenV1.ListAccessibleResourcesResponse, error) {
 	tenantID := getTenantIDFromContext(ctx)
+	callerID := getUserIDFromContext(ctx)
+
+	if req.UserId != callerID && !isPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("cannot list accessible resources for another user")
+	}
 
 	page := uint32(1)
 	if req.Page != nil {
@@ -250,9 +270,15 @@ func (s *PermissionService) ListAccessibleResources(ctx context.Context, req *wa
 	}, nil
 }
 
-// GetEffectivePermissions gets effective permissions for a subject on a resource
+// GetEffectivePermissions gets effective permissions for a subject on a resource.
+// Users can only query their own permissions unless they are platform admins.
 func (s *PermissionService) GetEffectivePermissions(ctx context.Context, req *wardenV1.GetEffectivePermissionsRequest) (*wardenV1.GetEffectivePermissionsResponse, error) {
 	tenantID := getTenantIDFromContext(ctx)
+	callerID := getUserIDFromContext(ctx)
+
+	if req.UserId != callerID && !isPlatformAdmin(ctx) {
+		return nil, wardenV1.ErrorAccessDenied("cannot query permissions for another user")
+	}
 
 	permissions, highestRelation := s.checker.GetEffectivePermissions(
 		ctx,

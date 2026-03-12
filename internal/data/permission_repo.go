@@ -59,13 +59,18 @@ func (r *PermissionRepo) Create(ctx context.Context, tenantID uint32, resourceTy
 	return entity, nil
 }
 
-// GetDirectPermissions returns permissions directly on a resource
+// GetDirectPermissions returns permissions directly on a resource, excluding expired ones
 func (r *PermissionRepo) GetDirectPermissions(ctx context.Context, tenantID uint32, resourceType authz.ResourceType, resourceID string) ([]authz.PermissionTuple, error) {
+	now := time.Now()
 	entities, err := r.entClient.Client().Permission.Query().
 		Where(
 			permission.TenantIDEQ(tenantID),
 			permission.ResourceTypeEQ(permission.ResourceType(resourceType)),
 			permission.ResourceIDEQ(resourceID),
+			permission.Or(
+				permission.ExpiresAtIsNil(),
+				permission.ExpiresAtGT(now),
+			),
 		).
 		All(ctx)
 	if err != nil {
@@ -81,13 +86,18 @@ func (r *PermissionRepo) GetDirectPermissions(ctx context.Context, tenantID uint
 	return tuples, nil
 }
 
-// GetSubjectPermissions returns all permissions for a subject
+// GetSubjectPermissions returns all non-expired permissions for a subject
 func (r *PermissionRepo) GetSubjectPermissions(ctx context.Context, tenantID uint32, subjectType authz.SubjectType, subjectID string) ([]authz.PermissionTuple, error) {
+	now := time.Now()
 	entities, err := r.entClient.Client().Permission.Query().
 		Where(
 			permission.TenantIDEQ(tenantID),
 			permission.SubjectTypeEQ(permission.SubjectType(subjectType)),
 			permission.SubjectIDEQ(subjectID),
+			permission.Or(
+				permission.ExpiresAtIsNil(),
+				permission.ExpiresAtGT(now),
+			),
 		).
 		All(ctx)
 	if err != nil {
@@ -103,8 +113,9 @@ func (r *PermissionRepo) GetSubjectPermissions(ctx context.Context, tenantID uin
 	return tuples, nil
 }
 
-// HasPermission checks if a specific permission exists
+// HasPermission checks if a specific non-expired permission exists
 func (r *PermissionRepo) HasPermission(ctx context.Context, tenantID uint32, resourceType authz.ResourceType, resourceID string, subjectType authz.SubjectType, subjectID string) (*authz.PermissionTuple, error) {
+	now := time.Now()
 	entity, err := r.entClient.Client().Permission.Query().
 		Where(
 			permission.TenantIDEQ(tenantID),
@@ -112,6 +123,10 @@ func (r *PermissionRepo) HasPermission(ctx context.Context, tenantID uint32, res
 			permission.ResourceIDEQ(resourceID),
 			permission.SubjectTypeEQ(permission.SubjectType(subjectType)),
 			permission.SubjectIDEQ(subjectID),
+			permission.Or(
+				permission.ExpiresAtIsNil(),
+				permission.ExpiresAtGT(now),
+			),
 		).
 		First(ctx)
 	if err != nil {
@@ -161,14 +176,19 @@ func (r *PermissionRepo) DeletePermission(ctx context.Context, tenantID uint32, 
 	return nil
 }
 
-// ListResourcesBySubject lists resources accessible by a subject
+// ListResourcesBySubject lists resources accessible by a subject, excluding expired permissions
 func (r *PermissionRepo) ListResourcesBySubject(ctx context.Context, tenantID uint32, subjectType authz.SubjectType, subjectID string, resourceType authz.ResourceType) ([]string, error) {
+	now := time.Now()
 	entities, err := r.entClient.Client().Permission.Query().
 		Where(
 			permission.TenantIDEQ(tenantID),
 			permission.SubjectTypeEQ(permission.SubjectType(subjectType)),
 			permission.SubjectIDEQ(subjectID),
 			permission.ResourceTypeEQ(permission.ResourceType(resourceType)),
+			permission.Or(
+				permission.ExpiresAtIsNil(),
+				permission.ExpiresAtGT(now),
+			),
 		).
 		Select(permission.FieldResourceID).
 		All(ctx)

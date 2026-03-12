@@ -1,7 +1,7 @@
 data:
   database:
     driver: "postgresql"
-    source: "postgres://postgres:admin123@localhost:5432/warden?sslmode=disable"
+    source: "postgres://postgres:${DB_PASSWORD:admin123}@${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:warden}?sslmode=disable"
     migrate: true
     max_idle: 10
     max_open: 100
