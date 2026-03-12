@@ -63,7 +63,7 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 		return nil, nil, err
 	}
 	userService := service.NewUserService(context, adminClient)
-	grpcServer := server.NewGRPCServer(context, certManager, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
+	grpcServer := server.NewGRPCServer(context, certManager, collector, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
 	httpServer := server.NewHTTPServer(context)
 
 	// Seed Prometheus metrics from database

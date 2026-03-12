@@ -15,6 +15,7 @@ import (
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
+	"github.com/go-tangra/go-tangra-warden/internal/metrics"
 	"github.com/go-tangra/go-tangra-warden/internal/service"
 
 	"github.com/go-tangra/go-tangra-common/middleware/audit"
@@ -37,6 +38,7 @@ func systemViewerMiddleware() middleware.Middleware {
 func NewGRPCServer(
 	ctx *bootstrap.Context,
 	certManager *cert.CertManager,
+	collector *metrics.Collector,
 	auditLogRepo *data.AuditLogRepo,
 	folderSvc *service.FolderService,
 	secretSvc *service.SecretService,
@@ -80,6 +82,7 @@ func NewGRPCServer(
 	// Add middleware
 	var ms []middleware.Middleware
 	ms = append(ms, recovery.Recovery())
+	ms = append(ms, collector.Middleware())
 	ms = append(ms, systemViewerMiddleware()) // Inject system viewer for ENT privacy
 	ms = append(ms, tracing.Server())
 	ms = append(ms, metadata.Server())
