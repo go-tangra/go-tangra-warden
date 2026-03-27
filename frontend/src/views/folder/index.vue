@@ -120,15 +120,15 @@ onMounted(() => {
   loadFolderTree();
 });
 
-// Handle folder selection
+// Handle folder selection — clear any active search filter
 function handleFolderSelect(keys: Key[]) {
   if (keys.length > 0) {
     selectedFolderId.value = String(keys[0]);
-    gridApi.reload();
   } else {
     selectedFolderId.value = undefined;
-    gridApi.reload();
   }
+  gridApi.formApi?.resetForm();
+  gridApi.reload();
 }
 
 // Secret list
@@ -533,6 +533,7 @@ const selectedFolderName = computed(() => {
           :class="{ 'bg-accent': !selectedFolderId }"
           @click="
             selectedFolderId = undefined;
+            gridApi.formApi?.resetForm();
             gridApi.reload();
           "
         >
