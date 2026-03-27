@@ -219,6 +219,7 @@ var (
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, Comment: "Custom fields, notes, tags (JSON)"},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 4096, Comment: "Description"},
 		{Name: "status", Type: field.TypeEnum, Comment: "Secret status", Enums: []string{"SECRET_STATUS_UNSPECIFIED", "SECRET_STATUS_ACTIVE", "SECRET_STATUS_ARCHIVED", "SECRET_STATUS_DELETED"}, Default: "SECRET_STATUS_ACTIVE"},
+		{Name: "has_totp", Type: field.TypeBool, Comment: "Whether this secret has a TOTP authenticator configured", Default: false},
 		{Name: "folder_id", Type: field.TypeString, Nullable: true, Comment: "Parent folder ID (null for root-level secrets)"},
 	}
 	// WardenSecretsTable holds the schema information for the "warden_secrets" table.
@@ -229,7 +230,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "warden_secrets_warden_folders_secrets",
-				Columns:    []*schema.Column{WardenSecretsColumns[15]},
+				Columns:    []*schema.Column{WardenSecretsColumns[16]},
 				RefColumns: []*schema.Column{WardenFoldersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -238,7 +239,7 @@ var (
 			{
 				Name:    "secret_tenant_id_folder_id_name",
 				Unique:  true,
-				Columns: []*schema.Column{WardenSecretsColumns[6], WardenSecretsColumns[15], WardenSecretsColumns[7]},
+				Columns: []*schema.Column{WardenSecretsColumns[6], WardenSecretsColumns[16], WardenSecretsColumns[7]},
 			},
 			{
 				Name:    "secret_tenant_id",
@@ -248,7 +249,7 @@ var (
 			{
 				Name:    "secret_folder_id",
 				Unique:  false,
-				Columns: []*schema.Column{WardenSecretsColumns[15]},
+				Columns: []*schema.Column{WardenSecretsColumns[16]},
 			},
 			{
 				Name:    "secret_tenant_id_name",

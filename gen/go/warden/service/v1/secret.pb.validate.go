@@ -161,6 +161,8 @@ func (m *Secret) validate(all bool) error {
 		}
 	}
 
+	// no validation rules for HasTotp
+
 	if m.FolderId != nil {
 		// no validation rules for FolderId
 	}
@@ -597,6 +599,8 @@ func (m *CreateSecretRequest) validate(all bool) error {
 		}
 
 	}
+
+	// no validation rules for TotpUrl
 
 	if m.FolderId != nil {
 		// no validation rules for FolderId
@@ -3443,3 +3447,560 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = SearchSecretsResponseValidationError{}
+
+// Validate checks the field values on GetSecretTotpRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetSecretTotpRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetSecretTotpRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetSecretTotpRequestMultiError, or nil if none found.
+func (m *GetSecretTotpRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetSecretTotpRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	if len(errors) > 0 {
+		return GetSecretTotpRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetSecretTotpRequestMultiError is an error wrapping multiple validation
+// errors returned by GetSecretTotpRequest.ValidateAll() if the designated
+// constraints aren't met.
+type GetSecretTotpRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetSecretTotpRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetSecretTotpRequestMultiError) AllErrors() []error { return m }
+
+// GetSecretTotpRequestValidationError is the validation error returned by
+// GetSecretTotpRequest.Validate if the designated constraints aren't met.
+type GetSecretTotpRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetSecretTotpRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetSecretTotpRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetSecretTotpRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetSecretTotpRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetSecretTotpRequestValidationError) ErrorName() string {
+	return "GetSecretTotpRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetSecretTotpRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetSecretTotpRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetSecretTotpRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetSecretTotpRequestValidationError{}
+
+// Validate checks the field values on GetSecretTotpResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GetSecretTotpResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GetSecretTotpResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GetSecretTotpResponseMultiError, or nil if none found.
+func (m *GetSecretTotpResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GetSecretTotpResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for TotpUrl
+
+	// no validation rules for CurrentCode
+
+	// no validation rules for RemainingSeconds
+
+	// no validation rules for Period
+
+	if len(errors) > 0 {
+		return GetSecretTotpResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// GetSecretTotpResponseMultiError is an error wrapping multiple validation
+// errors returned by GetSecretTotpResponse.ValidateAll() if the designated
+// constraints aren't met.
+type GetSecretTotpResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GetSecretTotpResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GetSecretTotpResponseMultiError) AllErrors() []error { return m }
+
+// GetSecretTotpResponseValidationError is the validation error returned by
+// GetSecretTotpResponse.Validate if the designated constraints aren't met.
+type GetSecretTotpResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GetSecretTotpResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GetSecretTotpResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GetSecretTotpResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GetSecretTotpResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GetSecretTotpResponseValidationError) ErrorName() string {
+	return "GetSecretTotpResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GetSecretTotpResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGetSecretTotpResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GetSecretTotpResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GetSecretTotpResponseValidationError{}
+
+// Validate checks the field values on SetSecretTotpRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *SetSecretTotpRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SetSecretTotpRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// SetSecretTotpRequestMultiError, or nil if none found.
+func (m *SetSecretTotpRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SetSecretTotpRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for TotpUrl
+
+	if len(errors) > 0 {
+		return SetSecretTotpRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// SetSecretTotpRequestMultiError is an error wrapping multiple validation
+// errors returned by SetSecretTotpRequest.ValidateAll() if the designated
+// constraints aren't met.
+type SetSecretTotpRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SetSecretTotpRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SetSecretTotpRequestMultiError) AllErrors() []error { return m }
+
+// SetSecretTotpRequestValidationError is the validation error returned by
+// SetSecretTotpRequest.Validate if the designated constraints aren't met.
+type SetSecretTotpRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SetSecretTotpRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SetSecretTotpRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SetSecretTotpRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SetSecretTotpRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SetSecretTotpRequestValidationError) ErrorName() string {
+	return "SetSecretTotpRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SetSecretTotpRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSetSecretTotpRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SetSecretTotpRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SetSecretTotpRequestValidationError{}
+
+// Validate checks the field values on SetSecretTotpResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *SetSecretTotpResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SetSecretTotpResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// SetSecretTotpResponseMultiError, or nil if none found.
+func (m *SetSecretTotpResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SetSecretTotpResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetSecret()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, SetSecretTotpResponseValidationError{
+					field:  "Secret",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, SetSecretTotpResponseValidationError{
+					field:  "Secret",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetSecret()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return SetSecretTotpResponseValidationError{
+				field:  "Secret",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for VerificationCode
+
+	if len(errors) > 0 {
+		return SetSecretTotpResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// SetSecretTotpResponseMultiError is an error wrapping multiple validation
+// errors returned by SetSecretTotpResponse.ValidateAll() if the designated
+// constraints aren't met.
+type SetSecretTotpResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SetSecretTotpResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SetSecretTotpResponseMultiError) AllErrors() []error { return m }
+
+// SetSecretTotpResponseValidationError is the validation error returned by
+// SetSecretTotpResponse.Validate if the designated constraints aren't met.
+type SetSecretTotpResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SetSecretTotpResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SetSecretTotpResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SetSecretTotpResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SetSecretTotpResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SetSecretTotpResponseValidationError) ErrorName() string {
+	return "SetSecretTotpResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e SetSecretTotpResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSetSecretTotpResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SetSecretTotpResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SetSecretTotpResponseValidationError{}
+
+// Validate checks the field values on DeleteSecretTotpRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *DeleteSecretTotpRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on DeleteSecretTotpRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// DeleteSecretTotpRequestMultiError, or nil if none found.
+func (m *DeleteSecretTotpRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *DeleteSecretTotpRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	if len(errors) > 0 {
+		return DeleteSecretTotpRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// DeleteSecretTotpRequestMultiError is an error wrapping multiple validation
+// errors returned by DeleteSecretTotpRequest.ValidateAll() if the designated
+// constraints aren't met.
+type DeleteSecretTotpRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m DeleteSecretTotpRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m DeleteSecretTotpRequestMultiError) AllErrors() []error { return m }
+
+// DeleteSecretTotpRequestValidationError is the validation error returned by
+// DeleteSecretTotpRequest.Validate if the designated constraints aren't met.
+type DeleteSecretTotpRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e DeleteSecretTotpRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e DeleteSecretTotpRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e DeleteSecretTotpRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e DeleteSecretTotpRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e DeleteSecretTotpRequestValidationError) ErrorName() string {
+	return "DeleteSecretTotpRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e DeleteSecretTotpRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sDeleteSecretTotpRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = DeleteSecretTotpRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = DeleteSecretTotpRequestValidationError{}

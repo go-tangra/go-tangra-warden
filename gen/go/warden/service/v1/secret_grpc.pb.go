@@ -32,6 +32,9 @@ const (
 	WardenSecretService_GetVersion_FullMethodName           = "/warden.service.v1.WardenSecretService/GetVersion"
 	WardenSecretService_RestoreVersion_FullMethodName       = "/warden.service.v1.WardenSecretService/RestoreVersion"
 	WardenSecretService_SearchSecrets_FullMethodName        = "/warden.service.v1.WardenSecretService/SearchSecrets"
+	WardenSecretService_GetSecretTotp_FullMethodName        = "/warden.service.v1.WardenSecretService/GetSecretTotp"
+	WardenSecretService_SetSecretTotp_FullMethodName        = "/warden.service.v1.WardenSecretService/SetSecretTotp"
+	WardenSecretService_DeleteSecretTotp_FullMethodName     = "/warden.service.v1.WardenSecretService/DeleteSecretTotp"
 )
 
 // WardenSecretServiceClient is the client API for WardenSecretService service.
@@ -64,6 +67,12 @@ type WardenSecretServiceClient interface {
 	RestoreVersion(ctx context.Context, in *RestoreVersionRequest, opts ...grpc.CallOption) (*RestoreVersionResponse, error)
 	// Search secrets across folders
 	SearchSecrets(ctx context.Context, in *SearchSecretsRequest, opts ...grpc.CallOption) (*SearchSecretsResponse, error)
+	// Get TOTP code for a secret (returns current code + remaining seconds)
+	GetSecretTotp(ctx context.Context, in *GetSecretTotpRequest, opts ...grpc.CallOption) (*GetSecretTotpResponse, error)
+	// Set or update the TOTP authenticator for a secret
+	SetSecretTotp(ctx context.Context, in *SetSecretTotpRequest, opts ...grpc.CallOption) (*SetSecretTotpResponse, error)
+	// Remove the TOTP authenticator from a secret
+	DeleteSecretTotp(ctx context.Context, in *DeleteSecretTotpRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type wardenSecretServiceClient struct {
@@ -194,6 +203,36 @@ func (c *wardenSecretServiceClient) SearchSecrets(ctx context.Context, in *Searc
 	return out, nil
 }
 
+func (c *wardenSecretServiceClient) GetSecretTotp(ctx context.Context, in *GetSecretTotpRequest, opts ...grpc.CallOption) (*GetSecretTotpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSecretTotpResponse)
+	err := c.cc.Invoke(ctx, WardenSecretService_GetSecretTotp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wardenSecretServiceClient) SetSecretTotp(ctx context.Context, in *SetSecretTotpRequest, opts ...grpc.CallOption) (*SetSecretTotpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSecretTotpResponse)
+	err := c.cc.Invoke(ctx, WardenSecretService_SetSecretTotp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wardenSecretServiceClient) DeleteSecretTotp(ctx context.Context, in *DeleteSecretTotpRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, WardenSecretService_DeleteSecretTotp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WardenSecretServiceServer is the server API for WardenSecretService service.
 // All implementations must embed UnimplementedWardenSecretServiceServer
 // for forward compatibility.
@@ -224,6 +263,12 @@ type WardenSecretServiceServer interface {
 	RestoreVersion(context.Context, *RestoreVersionRequest) (*RestoreVersionResponse, error)
 	// Search secrets across folders
 	SearchSecrets(context.Context, *SearchSecretsRequest) (*SearchSecretsResponse, error)
+	// Get TOTP code for a secret (returns current code + remaining seconds)
+	GetSecretTotp(context.Context, *GetSecretTotpRequest) (*GetSecretTotpResponse, error)
+	// Set or update the TOTP authenticator for a secret
+	SetSecretTotp(context.Context, *SetSecretTotpRequest) (*SetSecretTotpResponse, error)
+	// Remove the TOTP authenticator from a secret
+	DeleteSecretTotp(context.Context, *DeleteSecretTotpRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedWardenSecretServiceServer()
 }
 
@@ -269,6 +314,15 @@ func (UnimplementedWardenSecretServiceServer) RestoreVersion(context.Context, *R
 }
 func (UnimplementedWardenSecretServiceServer) SearchSecrets(context.Context, *SearchSecretsRequest) (*SearchSecretsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SearchSecrets not implemented")
+}
+func (UnimplementedWardenSecretServiceServer) GetSecretTotp(context.Context, *GetSecretTotpRequest) (*GetSecretTotpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSecretTotp not implemented")
+}
+func (UnimplementedWardenSecretServiceServer) SetSecretTotp(context.Context, *SetSecretTotpRequest) (*SetSecretTotpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSecretTotp not implemented")
+}
+func (UnimplementedWardenSecretServiceServer) DeleteSecretTotp(context.Context, *DeleteSecretTotpRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSecretTotp not implemented")
 }
 func (UnimplementedWardenSecretServiceServer) mustEmbedUnimplementedWardenSecretServiceServer() {}
 func (UnimplementedWardenSecretServiceServer) testEmbeddedByValue()                             {}
@@ -507,6 +561,60 @@ func _WardenSecretService_SearchSecrets_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WardenSecretService_GetSecretTotp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSecretTotpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WardenSecretServiceServer).GetSecretTotp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WardenSecretService_GetSecretTotp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WardenSecretServiceServer).GetSecretTotp(ctx, req.(*GetSecretTotpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WardenSecretService_SetSecretTotp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSecretTotpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WardenSecretServiceServer).SetSecretTotp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WardenSecretService_SetSecretTotp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WardenSecretServiceServer).SetSecretTotp(ctx, req.(*SetSecretTotpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WardenSecretService_DeleteSecretTotp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSecretTotpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WardenSecretServiceServer).DeleteSecretTotp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WardenSecretService_DeleteSecretTotp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WardenSecretServiceServer).DeleteSecretTotp(ctx, req.(*DeleteSecretTotpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WardenSecretService_ServiceDesc is the grpc.ServiceDesc for WardenSecretService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -561,6 +669,18 @@ var WardenSecretService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchSecrets",
 			Handler:    _WardenSecretService_SearchSecrets_Handler,
+		},
+		{
+			MethodName: "GetSecretTotp",
+			Handler:    _WardenSecretService_GetSecretTotp_Handler,
+		},
+		{
+			MethodName: "SetSecretTotp",
+			Handler:    _WardenSecretService_SetSecretTotp_Handler,
+		},
+		{
+			MethodName: "DeleteSecretTotp",
+			Handler:    _WardenSecretService_DeleteSecretTotp_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -181,6 +181,39 @@ func (s *redactedWardenSecretServiceServer) SearchSecrets(ctx context.Context, i
 	return res, err
 }
 
+// GetSecretTotp is the redacted wrapper for the actual WardenSecretServiceServer.GetSecretTotp method
+// Unary RPC
+func (s *redactedWardenSecretServiceServer) GetSecretTotp(ctx context.Context, in *GetSecretTotpRequest) (*GetSecretTotpResponse, error) {
+	res, err := s.srv.GetSecretTotp(ctx, in)
+	if !s.bypass.CheckInternal(ctx) {
+		// Apply redaction to the response
+		redact.Apply(res)
+	}
+	return res, err
+}
+
+// SetSecretTotp is the redacted wrapper for the actual WardenSecretServiceServer.SetSecretTotp method
+// Unary RPC
+func (s *redactedWardenSecretServiceServer) SetSecretTotp(ctx context.Context, in *SetSecretTotpRequest) (*SetSecretTotpResponse, error) {
+	res, err := s.srv.SetSecretTotp(ctx, in)
+	if !s.bypass.CheckInternal(ctx) {
+		// Apply redaction to the response
+		redact.Apply(res)
+	}
+	return res, err
+}
+
+// DeleteSecretTotp is the redacted wrapper for the actual WardenSecretServiceServer.DeleteSecretTotp method
+// Unary RPC
+func (s *redactedWardenSecretServiceServer) DeleteSecretTotp(ctx context.Context, in *DeleteSecretTotpRequest) (*emptypb.Empty, error) {
+	res, err := s.srv.DeleteSecretTotp(ctx, in)
+	if !s.bypass.CheckInternal(ctx) {
+		// Apply redaction to the response
+		redact.Apply(res)
+	}
+	return res, err
+}
+
 // Redact method implementation for Secret
 func (x *Secret) Redact() string {
 	if x == nil {
@@ -216,6 +249,8 @@ func (x *Secret) Redact() string {
 	// Safe field: CreatedBy
 
 	// Safe field: UpdatedBy
+
+	// Safe field: HasTotp
 	return x.String()
 }
 
@@ -279,6 +314,9 @@ func (x *CreateSecretRequest) Redact() string {
 	// Safe field: VersionComment
 
 	// Safe field: InitialPermissions
+
+	// Redacting field: TotpUrl
+	x.TotpUrl = ``
 	return x.String()
 }
 
@@ -569,5 +607,67 @@ func (x *SearchSecretsResponse) Redact() string {
 	// Safe field: Secrets
 
 	// Safe field: Total
+	return x.String()
+}
+
+// Redact method implementation for GetSecretTotpRequest
+func (x *GetSecretTotpRequest) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Id
+	return x.String()
+}
+
+// Redact method implementation for GetSecretTotpResponse
+func (x *GetSecretTotpResponse) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Redacting field: TotpUrl
+	x.TotpUrl = ``
+
+	// Safe field: CurrentCode
+
+	// Safe field: RemainingSeconds
+
+	// Safe field: Period
+	return x.String()
+}
+
+// Redact method implementation for SetSecretTotpRequest
+func (x *SetSecretTotpRequest) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Id
+
+	// Redacting field: TotpUrl
+	x.TotpUrl = ``
+	return x.String()
+}
+
+// Redact method implementation for SetSecretTotpResponse
+func (x *SetSecretTotpResponse) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Secret
+
+	// Safe field: VerificationCode
+	return x.String()
+}
+
+// Redact method implementation for DeleteSecretTotpRequest
+func (x *DeleteSecretTotpRequest) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Id
 	return x.String()
 }

@@ -5,12 +5,11 @@ package ent
 import (
 	"context"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
 )
 
 // FolderDelete is the builder for deleting a Folder entity.

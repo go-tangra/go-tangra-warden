@@ -5,10 +5,9 @@ package secret
 import (
 	"time"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
 )
 
 // ID filters vertices based on their ID field.
@@ -129,6 +128,11 @@ func CurrentVersion(v int32) predicate.Secret {
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.Secret {
 	return predicate.Secret(sql.FieldEQ(FieldDescription, v))
+}
+
+// HasTotp applies equality check predicate on the "has_totp" field. It's identical to HasTotpEQ.
+func HasTotp(v bool) predicate.Secret {
+	return predicate.Secret(sql.FieldEQ(FieldHasTotp, v))
 }
 
 // CreateByEQ applies the EQ predicate on the "create_by" field.
@@ -929,6 +933,16 @@ func StatusIn(vs ...Status) predicate.Secret {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.Secret {
 	return predicate.Secret(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// HasTotpEQ applies the EQ predicate on the "has_totp" field.
+func HasTotpEQ(v bool) predicate.Secret {
+	return predicate.Secret(sql.FieldEQ(FieldHasTotp, v))
+}
+
+// HasTotpNEQ applies the NEQ predicate on the "has_totp" field.
+func HasTotpNEQ(v bool) predicate.Secret {
+	return predicate.Secret(sql.FieldNEQ(FieldHasTotp, v))
 }
 
 // HasFolder applies the HasEdge predicate on the "folder" edge.

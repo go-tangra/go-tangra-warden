@@ -7,15 +7,14 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 )
 
 // SecretVersionQuery is the builder for querying SecretVersion entities.
@@ -279,9 +278,8 @@ func (_q *SecretVersionQuery) Clone() *SecretVersionQuery {
 		predicates: append([]predicate.SecretVersion{}, _q.predicates...),
 		withSecret: _q.withSecret.Clone(),
 		// clone intermediate query.
-		sql:       _q.sql.Clone(),
-		path:      _q.path,
-		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -554,12 +552,6 @@ func (_q *SecretVersionQuery) ForShare(opts ...sql.LockOption) *SecretVersionQue
 	return _q
 }
 
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_q *SecretVersionQuery) Modify(modifiers ...func(s *sql.Selector)) *SecretVersionSelect {
-	_q.modifiers = append(_q.modifiers, modifiers...)
-	return _q.Select()
-}
-
 // SecretVersionGroupBy is the group-by builder for SecretVersion entities.
 type SecretVersionGroupBy struct {
 	selector
@@ -648,10 +640,4 @@ func (_s *SecretVersionSelect) sqlScan(ctx context.Context, root *SecretVersionQ
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
-}
-
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_s *SecretVersionSelect) Modify(modifiers ...func(s *sql.Selector)) *SecretVersionSelect {
-	_s.modifiers = append(_s.modifiers, modifiers...)
-	return _s
 }

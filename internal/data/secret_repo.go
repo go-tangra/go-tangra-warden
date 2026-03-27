@@ -238,6 +238,20 @@ func (r *SecretRepo) Update(ctx context.Context, tenantID uint32, id string, nam
 }
 
 // UpdateVersion updates the current version of a secret (tenant-scoped)
+// SetHasTotp updates the has_totp flag on a secret.
+func (r *SecretRepo) SetHasTotp(ctx context.Context, tenantID uint32, id string, hasTotp bool) error {
+	_, err := r.entClient.Client().Secret.Update().
+		Where(secret.IDEQ(id), secret.TenantIDEQ(tenantID)).
+		SetHasTotp(hasTotp).
+		SetUpdateTime(time.Now()).
+		Save(ctx)
+	if err != nil {
+		r.log.Errorf("set has_totp failed: %s", err.Error())
+		return wardenV1.ErrorInternalServerError("update has_totp failed")
+	}
+	return nil
+}
+
 func (r *SecretRepo) UpdateVersion(ctx context.Context, tenantID uint32, id string, version int32, updatedBy *uint32) (*ent.Secret, error) {
 	// Verify secret belongs to tenant before updating
 	entity, err := r.entClient.Client().Secret.Query().
@@ -518,6 +532,8 @@ func (r *SecretRepo) ToProto(entity *ent.Secret) *wardenV1.Secret {
 	if entity.UpdateTime != nil && !entity.UpdateTime.IsZero() {
 		proto.UpdateTime = timestamppb.New(*entity.UpdateTime)
 	}
+
+	proto.HasTotp = entity.HasTotp
 
 	return proto
 }

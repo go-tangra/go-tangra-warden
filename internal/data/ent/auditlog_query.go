@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/auditlog"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/auditlog"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
 )
 
 // AuditLogQuery is the builder for querying AuditLog entities.
@@ -255,9 +254,8 @@ func (_q *AuditLogQuery) Clone() *AuditLogQuery {
 		inters:     append([]Interceptor{}, _q.inters...),
 		predicates: append([]predicate.AuditLog{}, _q.predicates...),
 		// clone intermediate query.
-		sql:       _q.sql.Clone(),
-		path:      _q.path,
-		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -482,12 +480,6 @@ func (_q *AuditLogQuery) ForShare(opts ...sql.LockOption) *AuditLogQuery {
 	return _q
 }
 
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_q *AuditLogQuery) Modify(modifiers ...func(s *sql.Selector)) *AuditLogSelect {
-	_q.modifiers = append(_q.modifiers, modifiers...)
-	return _q.Select()
-}
-
 // AuditLogGroupBy is the group-by builder for AuditLog entities.
 type AuditLogGroupBy struct {
 	selector
@@ -576,10 +568,4 @@ func (_s *AuditLogSelect) sqlScan(ctx context.Context, root *AuditLogQuery, v an
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
-}
-
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_s *AuditLogSelect) Modify(modifiers ...func(s *sql.Selector)) *AuditLogSelect {
-	_s.modifiers = append(_s.modifiers, modifiers...)
-	return _s
 }

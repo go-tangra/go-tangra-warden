@@ -69,6 +69,19 @@ export type CheckAccessResponse = components['schemas']['CheckAccessResponse'];
 export type HealthResponse = components['schemas']['HealthResponse'];
 export type CheckVaultResponse = components['schemas']['CheckVaultResponse'];
 export type ExportToBitwardenResponse = components['schemas']['ExportToBitwardenResponse'];
+
+// TOTP types (not yet in OpenAPI generated types)
+export interface GetSecretTotpResponse {
+  totpUrl: string;
+  currentCode: string;
+  remainingSeconds: number;
+  period: number;
+}
+
+export interface SetSecretTotpResponse {
+  secret: Secret;
+  verificationCode: string;
+}
 export type ImportFromBitwardenResponse = components['schemas']['ImportFromBitwardenResponse'];
 export type ValidateBitwardenImportResponse = components['schemas']['ValidateBitwardenImportResponse'];
 
@@ -228,6 +241,18 @@ export const SecretService = {
     options?: RequestOptions
   ): Promise<MoveSecretResponse> => {
     return wardenApi.post<MoveSecretResponse>(`/secrets/${id}/move`, { id, newFolderId }, options);
+  },
+
+  getTotp: async (id: string, options?: RequestOptions): Promise<GetSecretTotpResponse> => {
+    return wardenApi.get<GetSecretTotpResponse>(`/secrets/${id}/totp`, options);
+  },
+
+  setTotp: async (id: string, totpUrl: string, options?: RequestOptions): Promise<SetSecretTotpResponse> => {
+    return wardenApi.put<SetSecretTotpResponse>(`/secrets/${id}/totp`, { id, totpUrl }, options);
+  },
+
+  deleteTotp: async (id: string, options?: RequestOptions): Promise<void> => {
+    return wardenApi.delete<void>(`/secrets/${id}/totp`, options);
   },
 
   listVersions: async (

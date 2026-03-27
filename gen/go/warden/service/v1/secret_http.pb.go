@@ -22,14 +22,17 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationWardenSecretServiceCreateSecret = "/warden.service.v1.WardenSecretService/CreateSecret"
 const OperationWardenSecretServiceDeleteSecret = "/warden.service.v1.WardenSecretService/DeleteSecret"
+const OperationWardenSecretServiceDeleteSecretTotp = "/warden.service.v1.WardenSecretService/DeleteSecretTotp"
 const OperationWardenSecretServiceGetSecret = "/warden.service.v1.WardenSecretService/GetSecret"
 const OperationWardenSecretServiceGetSecretPassword = "/warden.service.v1.WardenSecretService/GetSecretPassword"
+const OperationWardenSecretServiceGetSecretTotp = "/warden.service.v1.WardenSecretService/GetSecretTotp"
 const OperationWardenSecretServiceGetVersion = "/warden.service.v1.WardenSecretService/GetVersion"
 const OperationWardenSecretServiceListSecrets = "/warden.service.v1.WardenSecretService/ListSecrets"
 const OperationWardenSecretServiceListVersions = "/warden.service.v1.WardenSecretService/ListVersions"
 const OperationWardenSecretServiceMoveSecret = "/warden.service.v1.WardenSecretService/MoveSecret"
 const OperationWardenSecretServiceRestoreVersion = "/warden.service.v1.WardenSecretService/RestoreVersion"
 const OperationWardenSecretServiceSearchSecrets = "/warden.service.v1.WardenSecretService/SearchSecrets"
+const OperationWardenSecretServiceSetSecretTotp = "/warden.service.v1.WardenSecretService/SetSecretTotp"
 const OperationWardenSecretServiceUpdateSecret = "/warden.service.v1.WardenSecretService/UpdateSecret"
 const OperationWardenSecretServiceUpdateSecretPassword = "/warden.service.v1.WardenSecretService/UpdateSecretPassword"
 
@@ -38,10 +41,14 @@ type WardenSecretServiceHTTPServer interface {
 	CreateSecret(context.Context, *CreateSecretRequest) (*CreateSecretResponse, error)
 	// DeleteSecret Delete a secret
 	DeleteSecret(context.Context, *DeleteSecretRequest) (*emptypb.Empty, error)
+	// DeleteSecretTotp Remove the TOTP authenticator from a secret
+	DeleteSecretTotp(context.Context, *DeleteSecretTotpRequest) (*emptypb.Empty, error)
 	// GetSecret Get a secret by ID (returns metadata, not password)
 	GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error)
 	// GetSecretPassword Retrieve the password for a secret
 	GetSecretPassword(context.Context, *GetSecretPasswordRequest) (*GetSecretPasswordResponse, error)
+	// GetSecretTotp Get TOTP code for a secret (returns current code + remaining seconds)
+	GetSecretTotp(context.Context, *GetSecretTotpRequest) (*GetSecretTotpResponse, error)
 	// GetVersion Get a specific version
 	GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error)
 	// ListSecrets List secrets in a folder
@@ -54,6 +61,8 @@ type WardenSecretServiceHTTPServer interface {
 	RestoreVersion(context.Context, *RestoreVersionRequest) (*RestoreVersionResponse, error)
 	// SearchSecrets Search secrets across folders
 	SearchSecrets(context.Context, *SearchSecretsRequest) (*SearchSecretsResponse, error)
+	// SetSecretTotp Set or update the TOTP authenticator for a secret
+	SetSecretTotp(context.Context, *SetSecretTotpRequest) (*SetSecretTotpResponse, error)
 	// UpdateSecret Update secret metadata
 	UpdateSecret(context.Context, *UpdateSecretRequest) (*UpdateSecretResponse, error)
 	// UpdateSecretPassword Update secret password (creates new version)
@@ -74,6 +83,9 @@ func RegisterWardenSecretServiceHTTPServer(s *http.Server, srv WardenSecretServi
 	r.GET("/v1/secrets/{secret_id}/versions/{version_number}", _WardenSecretService_GetVersion0_HTTP_Handler(srv))
 	r.POST("/v1/secrets/{secret_id}/versions/{version_number}/restore", _WardenSecretService_RestoreVersion0_HTTP_Handler(srv))
 	r.GET("/v1/secrets/search", _WardenSecretService_SearchSecrets0_HTTP_Handler(srv))
+	r.GET("/v1/secrets/{id}/totp", _WardenSecretService_GetSecretTotp0_HTTP_Handler(srv))
+	r.PUT("/v1/secrets/{id}/totp", _WardenSecretService_SetSecretTotp0_HTTP_Handler(srv))
+	r.DELETE("/v1/secrets/{id}/totp", _WardenSecretService_DeleteSecretTotp0_HTTP_Handler(srv))
 }
 
 func _WardenSecretService_CreateSecret0_HTTP_Handler(srv WardenSecretServiceHTTPServer) func(ctx http.Context) error {
@@ -343,15 +355,88 @@ func _WardenSecretService_SearchSecrets0_HTTP_Handler(srv WardenSecretServiceHTT
 	}
 }
 
+func _WardenSecretService_GetSecretTotp0_HTTP_Handler(srv WardenSecretServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSecretTotpRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationWardenSecretServiceGetSecretTotp)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSecretTotp(ctx, req.(*GetSecretTotpRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetSecretTotpResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _WardenSecretService_SetSecretTotp0_HTTP_Handler(srv WardenSecretServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SetSecretTotpRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationWardenSecretServiceSetSecretTotp)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SetSecretTotp(ctx, req.(*SetSecretTotpRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SetSecretTotpResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _WardenSecretService_DeleteSecretTotp0_HTTP_Handler(srv WardenSecretServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DeleteSecretTotpRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationWardenSecretServiceDeleteSecretTotp)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DeleteSecretTotp(ctx, req.(*DeleteSecretTotpRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*emptypb.Empty)
+		return ctx.Result(200, reply)
+	}
+}
+
 type WardenSecretServiceHTTPClient interface {
 	// CreateSecret Create a new secret
 	CreateSecret(ctx context.Context, req *CreateSecretRequest, opts ...http.CallOption) (rsp *CreateSecretResponse, err error)
 	// DeleteSecret Delete a secret
 	DeleteSecret(ctx context.Context, req *DeleteSecretRequest, opts ...http.CallOption) (rsp *emptypb.Empty, err error)
+	// DeleteSecretTotp Remove the TOTP authenticator from a secret
+	DeleteSecretTotp(ctx context.Context, req *DeleteSecretTotpRequest, opts ...http.CallOption) (rsp *emptypb.Empty, err error)
 	// GetSecret Get a secret by ID (returns metadata, not password)
 	GetSecret(ctx context.Context, req *GetSecretRequest, opts ...http.CallOption) (rsp *GetSecretResponse, err error)
 	// GetSecretPassword Retrieve the password for a secret
 	GetSecretPassword(ctx context.Context, req *GetSecretPasswordRequest, opts ...http.CallOption) (rsp *GetSecretPasswordResponse, err error)
+	// GetSecretTotp Get TOTP code for a secret (returns current code + remaining seconds)
+	GetSecretTotp(ctx context.Context, req *GetSecretTotpRequest, opts ...http.CallOption) (rsp *GetSecretTotpResponse, err error)
 	// GetVersion Get a specific version
 	GetVersion(ctx context.Context, req *GetVersionRequest, opts ...http.CallOption) (rsp *GetVersionResponse, err error)
 	// ListSecrets List secrets in a folder
@@ -364,6 +449,8 @@ type WardenSecretServiceHTTPClient interface {
 	RestoreVersion(ctx context.Context, req *RestoreVersionRequest, opts ...http.CallOption) (rsp *RestoreVersionResponse, err error)
 	// SearchSecrets Search secrets across folders
 	SearchSecrets(ctx context.Context, req *SearchSecretsRequest, opts ...http.CallOption) (rsp *SearchSecretsResponse, err error)
+	// SetSecretTotp Set or update the TOTP authenticator for a secret
+	SetSecretTotp(ctx context.Context, req *SetSecretTotpRequest, opts ...http.CallOption) (rsp *SetSecretTotpResponse, err error)
 	// UpdateSecret Update secret metadata
 	UpdateSecret(ctx context.Context, req *UpdateSecretRequest, opts ...http.CallOption) (rsp *UpdateSecretResponse, err error)
 	// UpdateSecretPassword Update secret password (creates new version)
@@ -406,6 +493,20 @@ func (c *WardenSecretServiceHTTPClientImpl) DeleteSecret(ctx context.Context, in
 	return &out, nil
 }
 
+// DeleteSecretTotp Remove the TOTP authenticator from a secret
+func (c *WardenSecretServiceHTTPClientImpl) DeleteSecretTotp(ctx context.Context, in *DeleteSecretTotpRequest, opts ...http.CallOption) (*emptypb.Empty, error) {
+	var out emptypb.Empty
+	pattern := "/v1/secrets/{id}/totp"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationWardenSecretServiceDeleteSecretTotp))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetSecret Get a secret by ID (returns metadata, not password)
 func (c *WardenSecretServiceHTTPClientImpl) GetSecret(ctx context.Context, in *GetSecretRequest, opts ...http.CallOption) (*GetSecretResponse, error) {
 	var out GetSecretResponse
@@ -426,6 +527,20 @@ func (c *WardenSecretServiceHTTPClientImpl) GetSecretPassword(ctx context.Contex
 	pattern := "/v1/secrets/{id}/password"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationWardenSecretServiceGetSecretPassword))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSecretTotp Get TOTP code for a secret (returns current code + remaining seconds)
+func (c *WardenSecretServiceHTTPClientImpl) GetSecretTotp(ctx context.Context, in *GetSecretTotpRequest, opts ...http.CallOption) (*GetSecretTotpResponse, error) {
+	var out GetSecretTotpResponse
+	pattern := "/v1/secrets/{id}/totp"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationWardenSecretServiceGetSecretTotp))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
@@ -512,6 +627,20 @@ func (c *WardenSecretServiceHTTPClientImpl) SearchSecrets(ctx context.Context, i
 	opts = append(opts, http.Operation(OperationWardenSecretServiceSearchSecrets))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetSecretTotp Set or update the TOTP authenticator for a secret
+func (c *WardenSecretServiceHTTPClientImpl) SetSecretTotp(ctx context.Context, in *SetSecretTotpRequest, opts ...http.CallOption) (*SetSecretTotpResponse, error) {
+	var out SetSecretTotpResponse
+	pattern := "/v1/secrets/{id}/totp"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationWardenSecretServiceSetSecretTotp))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

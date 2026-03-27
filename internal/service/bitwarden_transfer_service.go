@@ -241,6 +241,14 @@ func (s *BitwardenTransferService) ExportToBitwarden(ctx context.Context, req *w
 			}
 		}
 
+		// Add TOTP if configured
+		if secret.HasTotp {
+			totpPath := s.kvStore.BuildTotpPath(tenantID, secret.ID)
+			if totpURL, err := s.kvStore.GetTotpURL(ctx, totpPath); err == nil && totpURL != "" {
+				item.Login.TOTP = &totpURL
+			}
+		}
+
 		export.Items = append(export.Items, item)
 		itemsExported++
 	}
@@ -604,6 +612,16 @@ func (s *BitwardenTransferService) ImportFromBitwarden(ctx context.Context, req 
 
 		// Apply import permission rules
 		s.applyImportPermissionRules(ctx, tenantID, authz.ResourceTypeSecret, secretEntity.ID, req.PermissionRules, createdBy)
+
+		// Import TOTP if present
+		if bwItem.Login.TOTP != nil && *bwItem.Login.TOTP != "" {
+			totpPath := s.kvStore.BuildTotpPath(tenantID, secretEntity.ID)
+			if err := s.kvStore.StoreTotpURL(ctx, totpPath, *bwItem.Login.TOTP); err != nil {
+				s.log.Warnf("failed to store TOTP for imported secret %s: %v", secretEntity.ID, err)
+			} else {
+				_ = s.secretRepo.SetHasTotp(ctx, tenantID, secretEntity.ID, true)
+			}
+		}
 
 		s.metrics.SecretCreated(string(secretEntity.Status))
 

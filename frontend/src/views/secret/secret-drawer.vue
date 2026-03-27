@@ -72,6 +72,90 @@ const passwordForm = ref<{
 });
 const updatingPassword = ref(false);
 
+// TOTP state
+const totpCode = ref('');
+const totpRemaining = ref(0);
+const totpPeriod = ref(30);
+const totpUrl = ref('');
+const loadingTotp = ref(false);
+const newTotpUrl = ref('');
+const settingTotp = ref(false);
+let totpTimer: ReturnType<typeof setInterval> | null = null;
+
+async function loadTotp() {
+  if (!data.value?.row?.id || !data.value.row.hasTotp) return;
+  loadingTotp.value = true;
+  try {
+    const resp = await secretStore.getSecretTotp(data.value.row.id);
+    totpCode.value = resp.currentCode;
+    totpRemaining.value = resp.remainingSeconds;
+    totpPeriod.value = resp.period || 30;
+    totpUrl.value = resp.totpUrl;
+  } catch {
+    totpCode.value = '';
+  } finally {
+    loadingTotp.value = false;
+  }
+}
+
+function startTotpTimer() {
+  stopTotpTimer();
+  totpTimer = setInterval(() => {
+    totpRemaining.value--;
+    if (totpRemaining.value <= 0) {
+      loadTotp();
+    }
+  }, 1000);
+}
+
+function stopTotpTimer() {
+  if (totpTimer) {
+    clearInterval(totpTimer);
+    totpTimer = null;
+  }
+}
+
+async function handleCopyTotp() {
+  if (!totpCode.value) await loadTotp();
+  try {
+    await navigator.clipboard.writeText(totpCode.value);
+    notification.success({ message: $t('warden.page.secret.totpCopied', 'TOTP code copied') });
+  } catch {
+    notification.error({ message: $t('ui.notification.operation_failed') });
+  }
+}
+
+async function handleSetTotp() {
+  if (!data.value?.row?.id || !newTotpUrl.value) return;
+  settingTotp.value = true;
+  try {
+    const resp = await secretStore.setSecretTotp(data.value.row.id, newTotpUrl.value);
+    notification.success({ message: $t('warden.page.secret.totpSet', 'TOTP configured'), description: `Verification code: ${resp.verificationCode}` });
+    data.value.row.hasTotp = true;
+    newTotpUrl.value = '';
+    await loadTotp();
+    startTotpTimer();
+  } catch (e: any) {
+    notification.error({ message: $t('ui.notification.operation_failed'), description: e?.message });
+  } finally {
+    settingTotp.value = false;
+  }
+}
+
+async function handleDeleteTotp() {
+  if (!data.value?.row?.id) return;
+  try {
+    await secretStore.deleteSecretTotp(data.value.row.id);
+    notification.success({ message: $t('warden.page.secret.totpRemoved', 'TOTP removed') });
+    data.value.row.hasTotp = false;
+    totpCode.value = '';
+    totpUrl.value = '';
+    stopTotpTimer();
+  } catch {
+    notification.error({ message: $t('ui.notification.operation_failed') });
+  }
+}
+
 // Initial permissions for create mode
 const initialPermissions = ref<Array<{
   subjectType: 'SUBJECT_TYPE_USER' | 'SUBJECT_TYPE_ROLE';
@@ -269,7 +353,8 @@ async function handleSubmit() {
         versionComment: formState.value.versionComment,
         metadata: {},
         ...(validPermissions.length > 0 ? { initialPermissions: validPermissions } : {}),
-      });
+        ...(newTotpUrl.value ? { totpUrl: newTotpUrl.value } : {}),
+      } as any);
       notification.success({
         message: $t('warden.page.secret.createSuccess'),
       });
@@ -374,7 +459,19 @@ const [Drawer, drawerApi] = useVbenDrawer({
         };
         currentPassword.value = '';
         showPassword.value = false;
+
+        // Load TOTP if configured
+        if (data.value.row.hasTotp) {
+          await loadTotp();
+          startTotpTimer();
+        }
       }
+    } else {
+      // Cleanup on close
+      stopTotpTimer();
+      totpCode.value = '';
+      totpUrl.value = '';
+      newTotpUrl.value = '';
     }
   },
 });
@@ -412,6 +509,49 @@ const secret = computed(() => data.value?.row);
               @click="handleCopyPassword"
             />
           </Space>
+        </DescriptionsItem>
+        <DescriptionsItem label="2FA / TOTP">
+          <div v-if="secret.hasTotp">
+            <Space align="center">
+              <span
+                style="font-family: monospace; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1890ff"
+              >{{ totpCode || '------' }}</span>
+              <span style="font-size: 12px; color: #999; min-width: 32px">
+                {{ totpRemaining }}s
+              </span>
+              <Button
+                type="text"
+                size="small"
+                :icon="h(LucideCopy)"
+                @click="handleCopyTotp"
+              />
+            </Space>
+            <div style="margin-top: 8px">
+              <Button size="small" danger @click="handleDeleteTotp">
+                Remove TOTP
+              </Button>
+            </div>
+          </div>
+          <div v-else>
+            <Space>
+              <Input
+                v-model:value="newTotpUrl"
+                size="small"
+                placeholder="otpauth:// URL or base32 secret"
+                style="width: 280px"
+                @press-enter="handleSetTotp"
+              />
+              <Button
+                size="small"
+                type="primary"
+                :loading="settingTotp"
+                :disabled="!newTotpUrl"
+                @click="handleSetTotp"
+              >
+                Set TOTP
+              </Button>
+            </Space>
+          </div>
         </DescriptionsItem>
         <DescriptionsItem :label="$t('warden.page.secret.hostUrl')">
           <a v-if="secret.hostUrl" :href="secret.hostUrl" target="_blank">
@@ -517,6 +657,18 @@ const secret = computed(() => data.value?.row);
           <Input
             v-model:value="formState.versionComment"
             :placeholder="$t('ui.placeholder.input')"
+            :maxlength="1024"
+          />
+        </FormItem>
+
+        <FormItem
+          v-if="isCreateMode"
+          label="2FA / TOTP (optional)"
+          name="totpUrl"
+        >
+          <Input
+            v-model:value="newTotpUrl"
+            placeholder="otpauth:// URL or base32 secret"
             :maxlength="1024"
           />
         </FormItem>

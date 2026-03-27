@@ -9,17 +9,16 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 )
 
 // SecretQuery is the builder for querying Secret entities.
@@ -331,9 +330,8 @@ func (_q *SecretQuery) Clone() *SecretQuery {
 		withVersions:    _q.withVersions.Clone(),
 		withPermissions: _q.withPermissions.Clone(),
 		// clone intermediate query.
-		sql:       _q.sql.Clone(),
-		path:      _q.path,
-		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -714,12 +712,6 @@ func (_q *SecretQuery) ForShare(opts ...sql.LockOption) *SecretQuery {
 	return _q
 }
 
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_q *SecretQuery) Modify(modifiers ...func(s *sql.Selector)) *SecretSelect {
-	_q.modifiers = append(_q.modifiers, modifiers...)
-	return _q.Select()
-}
-
 // SecretGroupBy is the group-by builder for Secret entities.
 type SecretGroupBy struct {
 	selector
@@ -808,10 +800,4 @@ func (_s *SecretSelect) sqlScan(ctx context.Context, root *SecretQuery, v any) e
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
-}
-
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_s *SecretSelect) Modify(modifiers ...func(s *sql.Selector)) *SecretSelect {
-	_s.modifiers = append(_s.modifiers, modifiers...)
-	return _s
 }

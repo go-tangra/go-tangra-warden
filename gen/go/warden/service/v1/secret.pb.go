@@ -98,6 +98,7 @@ type Secret struct {
 	UpdateTime     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
 	CreatedBy      *uint32                `protobuf:"varint,14,opt,name=created_by,json=createdBy,proto3,oneof" json:"created_by,omitempty"`
 	UpdatedBy      *uint32                `protobuf:"varint,15,opt,name=updated_by,json=updatedBy,proto3,oneof" json:"updated_by,omitempty"`
+	HasTotp        bool                   `protobuf:"varint,16,opt,name=has_totp,json=hasTotp,proto3" json:"has_totp,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -235,6 +236,13 @@ func (x *Secret) GetUpdatedBy() uint32 {
 		return *x.UpdatedBy
 	}
 	return 0
+}
+
+func (x *Secret) GetHasTotp() bool {
+	if x != nil {
+		return x.HasTotp
+	}
+	return false
 }
 
 // Secret version
@@ -412,8 +420,10 @@ type CreateSecretRequest struct {
 	VersionComment string `protobuf:"bytes,8,opt,name=version_comment,json=versionComment,proto3" json:"version_comment,omitempty"`
 	// Permissions to grant on the newly created secret
 	InitialPermissions []*InitialPermissionGrant `protobuf:"bytes,9,rep,name=initial_permissions,json=initialPermissions,proto3" json:"initial_permissions,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// TOTP authenticator URL (otpauth:// URI or base32 secret)
+	TotpUrl       string `protobuf:"bytes,10,opt,name=totp_url,json=totpUrl,proto3" json:"totp_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateSecretRequest) Reset() {
@@ -507,6 +517,13 @@ func (x *CreateSecretRequest) GetInitialPermissions() []*InitialPermissionGrant 
 		return x.InitialPermissions
 	}
 	return nil
+}
+
+func (x *CreateSecretRequest) GetTotpUrl() string {
+	if x != nil {
+		return x.TotpUrl
+	}
+	return ""
 }
 
 type CreateSecretResponse struct {
@@ -1775,11 +1792,277 @@ func (x *SearchSecretsResponse) GetTotal() uint32 {
 	return 0
 }
 
+type GetSecretTotpRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecretTotpRequest) Reset() {
+	*x = GetSecretTotpRequest{}
+	mi := &file_warden_service_v1_secret_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecretTotpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecretTotpRequest) ProtoMessage() {}
+
+func (x *GetSecretTotpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_secret_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecretTotpRequest.ProtoReflect.Descriptor instead.
+func (*GetSecretTotpRequest) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_secret_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GetSecretTotpRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type GetSecretTotpResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The TOTP URL (otpauth:// URI or base32 secret)
+	TotpUrl string `protobuf:"bytes,1,opt,name=totp_url,json=totpUrl,proto3" json:"totp_url,omitempty"`
+	// Current 6-digit TOTP code
+	CurrentCode string `protobuf:"bytes,2,opt,name=current_code,json=currentCode,proto3" json:"current_code,omitempty"`
+	// Seconds remaining before code rotates
+	RemainingSeconds int32 `protobuf:"varint,3,opt,name=remaining_seconds,json=remainingSeconds,proto3" json:"remaining_seconds,omitempty"`
+	// TOTP period in seconds (typically 30)
+	Period        int32 `protobuf:"varint,4,opt,name=period,proto3" json:"period,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecretTotpResponse) Reset() {
+	*x = GetSecretTotpResponse{}
+	mi := &file_warden_service_v1_secret_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecretTotpResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecretTotpResponse) ProtoMessage() {}
+
+func (x *GetSecretTotpResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_secret_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecretTotpResponse.ProtoReflect.Descriptor instead.
+func (*GetSecretTotpResponse) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_secret_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GetSecretTotpResponse) GetTotpUrl() string {
+	if x != nil {
+		return x.TotpUrl
+	}
+	return ""
+}
+
+func (x *GetSecretTotpResponse) GetCurrentCode() string {
+	if x != nil {
+		return x.CurrentCode
+	}
+	return ""
+}
+
+func (x *GetSecretTotpResponse) GetRemainingSeconds() int32 {
+	if x != nil {
+		return x.RemainingSeconds
+	}
+	return 0
+}
+
+func (x *GetSecretTotpResponse) GetPeriod() int32 {
+	if x != nil {
+		return x.Period
+	}
+	return 0
+}
+
+type SetSecretTotpRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// TOTP URL (otpauth:// URI or base32 secret)
+	TotpUrl       string `protobuf:"bytes,2,opt,name=totp_url,json=totpUrl,proto3" json:"totp_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSecretTotpRequest) Reset() {
+	*x = SetSecretTotpRequest{}
+	mi := &file_warden_service_v1_secret_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSecretTotpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSecretTotpRequest) ProtoMessage() {}
+
+func (x *SetSecretTotpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_secret_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSecretTotpRequest.ProtoReflect.Descriptor instead.
+func (*SetSecretTotpRequest) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_secret_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SetSecretTotpRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SetSecretTotpRequest) GetTotpUrl() string {
+	if x != nil {
+		return x.TotpUrl
+	}
+	return ""
+}
+
+type SetSecretTotpResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Secret *Secret                `protobuf:"bytes,1,opt,name=secret,proto3" json:"secret,omitempty"`
+	// Verification code to confirm TOTP was configured correctly
+	VerificationCode string `protobuf:"bytes,2,opt,name=verification_code,json=verificationCode,proto3" json:"verification_code,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SetSecretTotpResponse) Reset() {
+	*x = SetSecretTotpResponse{}
+	mi := &file_warden_service_v1_secret_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSecretTotpResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSecretTotpResponse) ProtoMessage() {}
+
+func (x *SetSecretTotpResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_secret_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSecretTotpResponse.ProtoReflect.Descriptor instead.
+func (*SetSecretTotpResponse) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_secret_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *SetSecretTotpResponse) GetSecret() *Secret {
+	if x != nil {
+		return x.Secret
+	}
+	return nil
+}
+
+func (x *SetSecretTotpResponse) GetVerificationCode() string {
+	if x != nil {
+		return x.VerificationCode
+	}
+	return ""
+}
+
+type DeleteSecretTotpRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteSecretTotpRequest) Reset() {
+	*x = DeleteSecretTotpRequest{}
+	mi := &file_warden_service_v1_secret_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteSecretTotpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteSecretTotpRequest) ProtoMessage() {}
+
+func (x *DeleteSecretTotpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_secret_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteSecretTotpRequest.ProtoReflect.Descriptor instead.
+func (*DeleteSecretTotpRequest) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_secret_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DeleteSecretTotpRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 var File_warden_service_v1_secret_proto protoreflect.FileDescriptor
 
 const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\n" +
-	"\x1ewarden/service/v1/secret.proto\x12\x11warden.service.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16redact/v3/redact.proto\x1a\"warden/service/v1/permission.proto\"\xea\x04\n" +
+	"\x1ewarden/service/v1/secret.proto\x12\x11warden.service.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16redact/v3/redact.proto\x1a\"warden/service/v1/permission.proto\"\x85\x05\n" +
 	"\x06Secret\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\rR\btenantId\x12 \n" +
@@ -1801,7 +2084,8 @@ const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\n" +
 	"created_by\x18\x0e \x01(\rH\x01R\tcreatedBy\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"updated_by\x18\x0f \x01(\rH\x02R\tupdatedBy\x88\x01\x01B\f\n" +
+	"updated_by\x18\x0f \x01(\rH\x02R\tupdatedBy\x88\x01\x01\x12\x19\n" +
+	"\bhas_totp\x18\x10 \x01(\bR\ahasTotpB\f\n" +
 	"\n" +
 	"_folder_idB\r\n" +
 	"\v_created_byB\r\n" +
@@ -1821,7 +2105,7 @@ const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\fsubject_type\x18\x01 \x01(\x0e2\x1e.warden.service.v1.SubjectTypeR\vsubjectType\x12\x1d\n" +
 	"\n" +
 	"subject_id\x18\x02 \x01(\tR\tsubjectId\x127\n" +
-	"\brelation\x18\x03 \x01(\x0e2\x1b.warden.service.v1.RelationR\brelation\"\x92\x04\n" +
+	"\brelation\x18\x03 \x01(\x0e2\x1b.warden.service.v1.RelationR\brelation\"\xbd\x04\n" +
 	"\x13CreateSecretRequest\x12;\n" +
 	"\tfolder_id\x18\x01 \x01(\tB\x19\xbaH\x16r\x14\x18$2\x10^[a-fA-F0-9\\-]*$H\x00R\bfolderId\x88\x01\x01\x12C\n" +
 	"\x04name\x18\x02 \x01(\tB/\xe0A\x02\xbaH)r'\x10\x01\x18\xff\x012 ^[a-zA-Z0-9][a-zA-Z0-9\\-_\\.\\s]*$R\x04name\x12$\n" +
@@ -1831,7 +2115,9 @@ const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\vdescription\x18\x06 \x01(\tB\b\xbaH\x05r\x03\x18\x80 R\vdescription\x123\n" +
 	"\bmetadata\x18\a \x01(\v2\x17.google.protobuf.StructR\bmetadata\x121\n" +
 	"\x0fversion_comment\x18\b \x01(\tB\b\xbaH\x05r\x03\x18\x80\bR\x0eversionComment\x12Z\n" +
-	"\x13initial_permissions\x18\t \x03(\v2).warden.service.v1.InitialPermissionGrantR\x12initialPermissionsB\f\n" +
+	"\x13initial_permissions\x18\t \x03(\v2).warden.service.v1.InitialPermissionGrantR\x12initialPermissions\x12)\n" +
+	"\btotp_url\x18\n" +
+	" \x01(\tB\x0e\xbaH\x05r\x03\x18\x80\bڶ\x1a\x02z\x00R\atotpUrlB\f\n" +
 	"\n" +
 	"_folder_id\"I\n" +
 	"\x14CreateSecretResponse\x121\n" +
@@ -1940,12 +2226,27 @@ const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\a_status\"b\n" +
 	"\x15SearchSecretsResponse\x123\n" +
 	"\asecrets\x18\x01 \x03(\v2\x19.warden.service.v1.SecretR\asecrets\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\rR\x05total*~\n" +
+	"\x05total\x18\x02 \x01(\rR\x05total\"F\n" +
+	"\x14GetSecretTotpRequest\x12.\n" +
+	"\x02id\x18\x01 \x01(\tB\x1e\xe0A\x02\xbaH\x18r\x16\x10\x01\x18$2\x10^[a-fA-F0-9\\-]+$R\x02id\"\xa2\x01\n" +
+	"\x15GetSecretTotpResponse\x12!\n" +
+	"\btotp_url\x18\x01 \x01(\tB\x06ڶ\x1a\x02z\x00R\atotpUrl\x12!\n" +
+	"\fcurrent_code\x18\x02 \x01(\tR\vcurrentCode\x12+\n" +
+	"\x11remaining_seconds\x18\x03 \x01(\x05R\x10remainingSeconds\x12\x16\n" +
+	"\x06period\x18\x04 \x01(\x05R\x06period\"v\n" +
+	"\x14SetSecretTotpRequest\x12.\n" +
+	"\x02id\x18\x01 \x01(\tB\x1e\xe0A\x02\xbaH\x18r\x16\x10\x01\x18$2\x10^[a-fA-F0-9\\-]+$R\x02id\x12.\n" +
+	"\btotp_url\x18\x02 \x01(\tB\x13\xe0A\x02\xbaH\ar\x05\x10\x01\x18\x80\bڶ\x1a\x02z\x00R\atotpUrl\"w\n" +
+	"\x15SetSecretTotpResponse\x121\n" +
+	"\x06secret\x18\x01 \x01(\v2\x19.warden.service.v1.SecretR\x06secret\x12+\n" +
+	"\x11verification_code\x18\x02 \x01(\tR\x10verificationCode\"I\n" +
+	"\x17DeleteSecretTotpRequest\x12.\n" +
+	"\x02id\x18\x01 \x01(\tB\x1e\xe0A\x02\xbaH\x18r\x16\x10\x01\x18$2\x10^[a-fA-F0-9\\-]+$R\x02id*~\n" +
 	"\fSecretStatus\x12\x1d\n" +
 	"\x19SECRET_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14SECRET_STATUS_ACTIVE\x10\x01\x12\x1a\n" +
 	"\x16SECRET_STATUS_ARCHIVED\x10\x02\x12\x19\n" +
-	"\x15SECRET_STATUS_DELETED\x10\x032\xda\f\n" +
+	"\x15SECRET_STATUS_DELETED\x10\x032\xdc\x0f\n" +
 	"\x13WardenSecretService\x12w\n" +
 	"\fCreateSecret\x12&.warden.service.v1.CreateSecretRequest\x1a'.warden.service.v1.CreateSecretResponse\"\x16\x82\xd3\xe4\x93\x02\x10:\x01*\"\v/v1/secrets\x12p\n" +
 	"\tGetSecret\x12#.warden.service.v1.GetSecretRequest\x1a$.warden.service.v1.GetSecretResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/secrets/{id}\x12\x91\x01\n" +
@@ -1960,7 +2261,10 @@ const file_warden_service_v1_secret_proto_rawDesc = "" +
 	"\n" +
 	"GetVersion\x12$.warden.service.v1.GetVersionRequest\x1a%.warden.service.v1.GetVersionResponse\"9\x82\xd3\xe4\x93\x023\x121/v1/secrets/{secret_id}/versions/{version_number}\x12\xa8\x01\n" +
 	"\x0eRestoreVersion\x12(.warden.service.v1.RestoreVersionRequest\x1a).warden.service.v1.RestoreVersionResponse\"A\x82\xd3\xe4\x93\x02;\"9/v1/secrets/{secret_id}/versions/{version_number}/restore\x12~\n" +
-	"\rSearchSecrets\x12'.warden.service.v1.SearchSecretsRequest\x1a(.warden.service.v1.SearchSecretsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/secrets/searchB\xd3\x01\n" +
+	"\rSearchSecrets\x12'.warden.service.v1.SearchSecretsRequest\x1a(.warden.service.v1.SearchSecretsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/secrets/search\x12\x81\x01\n" +
+	"\rGetSecretTotp\x12'.warden.service.v1.GetSecretTotpRequest\x1a(.warden.service.v1.GetSecretTotpResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/secrets/{id}/totp\x12\x84\x01\n" +
+	"\rSetSecretTotp\x12'.warden.service.v1.SetSecretTotpRequest\x1a(.warden.service.v1.SetSecretTotpResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\x1a\x15/v1/secrets/{id}/totp\x12u\n" +
+	"\x10DeleteSecretTotp\x12*.warden.service.v1.DeleteSecretTotpRequest\x1a\x16.google.protobuf.Empty\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/v1/secrets/{id}/totpB\xd3\x01\n" +
 	"\x15com.warden.service.v1B\vSecretProtoP\x01ZGgithub.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1;wardenpb\xa2\x02\x03WSX\xaa\x02\x11Warden.Service.V1\xca\x02\x11Warden\\Service\\V1\xe2\x02\x1dWarden\\Service\\V1\\GPBMetadata\xea\x02\x13Warden::Service::V1b\x06proto3"
 
 var (
@@ -1976,7 +2280,7 @@ func file_warden_service_v1_secret_proto_rawDescGZIP() []byte {
 }
 
 var file_warden_service_v1_secret_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_warden_service_v1_secret_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_warden_service_v1_secret_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_warden_service_v1_secret_proto_goTypes = []any{
 	(SecretStatus)(0),                    // 0: warden.service.v1.SecretStatus
 	(*Secret)(nil),                       // 1: warden.service.v1.Secret
@@ -2005,27 +2309,32 @@ var file_warden_service_v1_secret_proto_goTypes = []any{
 	(*RestoreVersionResponse)(nil),       // 24: warden.service.v1.RestoreVersionResponse
 	(*SearchSecretsRequest)(nil),         // 25: warden.service.v1.SearchSecretsRequest
 	(*SearchSecretsResponse)(nil),        // 26: warden.service.v1.SearchSecretsResponse
-	(*structpb.Struct)(nil),              // 27: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),        // 28: google.protobuf.Timestamp
-	(SubjectType)(0),                     // 29: warden.service.v1.SubjectType
-	(Relation)(0),                        // 30: warden.service.v1.Relation
-	(*emptypb.Empty)(nil),                // 31: google.protobuf.Empty
+	(*GetSecretTotpRequest)(nil),         // 27: warden.service.v1.GetSecretTotpRequest
+	(*GetSecretTotpResponse)(nil),        // 28: warden.service.v1.GetSecretTotpResponse
+	(*SetSecretTotpRequest)(nil),         // 29: warden.service.v1.SetSecretTotpRequest
+	(*SetSecretTotpResponse)(nil),        // 30: warden.service.v1.SetSecretTotpResponse
+	(*DeleteSecretTotpRequest)(nil),      // 31: warden.service.v1.DeleteSecretTotpRequest
+	(*structpb.Struct)(nil),              // 32: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),        // 33: google.protobuf.Timestamp
+	(SubjectType)(0),                     // 34: warden.service.v1.SubjectType
+	(Relation)(0),                        // 35: warden.service.v1.Relation
+	(*emptypb.Empty)(nil),                // 36: google.protobuf.Empty
 }
 var file_warden_service_v1_secret_proto_depIdxs = []int32{
-	27, // 0: warden.service.v1.Secret.metadata:type_name -> google.protobuf.Struct
+	32, // 0: warden.service.v1.Secret.metadata:type_name -> google.protobuf.Struct
 	0,  // 1: warden.service.v1.Secret.status:type_name -> warden.service.v1.SecretStatus
-	28, // 2: warden.service.v1.Secret.create_time:type_name -> google.protobuf.Timestamp
-	28, // 3: warden.service.v1.Secret.update_time:type_name -> google.protobuf.Timestamp
-	28, // 4: warden.service.v1.SecretVersion.create_time:type_name -> google.protobuf.Timestamp
-	29, // 5: warden.service.v1.InitialPermissionGrant.subject_type:type_name -> warden.service.v1.SubjectType
-	30, // 6: warden.service.v1.InitialPermissionGrant.relation:type_name -> warden.service.v1.Relation
-	27, // 7: warden.service.v1.CreateSecretRequest.metadata:type_name -> google.protobuf.Struct
+	33, // 2: warden.service.v1.Secret.create_time:type_name -> google.protobuf.Timestamp
+	33, // 3: warden.service.v1.Secret.update_time:type_name -> google.protobuf.Timestamp
+	33, // 4: warden.service.v1.SecretVersion.create_time:type_name -> google.protobuf.Timestamp
+	34, // 5: warden.service.v1.InitialPermissionGrant.subject_type:type_name -> warden.service.v1.SubjectType
+	35, // 6: warden.service.v1.InitialPermissionGrant.relation:type_name -> warden.service.v1.Relation
+	32, // 7: warden.service.v1.CreateSecretRequest.metadata:type_name -> google.protobuf.Struct
 	3,  // 8: warden.service.v1.CreateSecretRequest.initial_permissions:type_name -> warden.service.v1.InitialPermissionGrant
 	1,  // 9: warden.service.v1.CreateSecretResponse.secret:type_name -> warden.service.v1.Secret
 	1,  // 10: warden.service.v1.GetSecretResponse.secret:type_name -> warden.service.v1.Secret
 	0,  // 11: warden.service.v1.ListSecretsRequest.status:type_name -> warden.service.v1.SecretStatus
 	1,  // 12: warden.service.v1.ListSecretsResponse.secrets:type_name -> warden.service.v1.Secret
-	27, // 13: warden.service.v1.UpdateSecretRequest.metadata:type_name -> google.protobuf.Struct
+	32, // 13: warden.service.v1.UpdateSecretRequest.metadata:type_name -> google.protobuf.Struct
 	0,  // 14: warden.service.v1.UpdateSecretRequest.status:type_name -> warden.service.v1.SecretStatus
 	1,  // 15: warden.service.v1.UpdateSecretResponse.secret:type_name -> warden.service.v1.Secret
 	1,  // 16: warden.service.v1.UpdateSecretPasswordResponse.secret:type_name -> warden.service.v1.Secret
@@ -2037,35 +2346,42 @@ var file_warden_service_v1_secret_proto_depIdxs = []int32{
 	2,  // 22: warden.service.v1.RestoreVersionResponse.new_version:type_name -> warden.service.v1.SecretVersion
 	0,  // 23: warden.service.v1.SearchSecretsRequest.status:type_name -> warden.service.v1.SecretStatus
 	1,  // 24: warden.service.v1.SearchSecretsResponse.secrets:type_name -> warden.service.v1.Secret
-	4,  // 25: warden.service.v1.WardenSecretService.CreateSecret:input_type -> warden.service.v1.CreateSecretRequest
-	6,  // 26: warden.service.v1.WardenSecretService.GetSecret:input_type -> warden.service.v1.GetSecretRequest
-	8,  // 27: warden.service.v1.WardenSecretService.GetSecretPassword:input_type -> warden.service.v1.GetSecretPasswordRequest
-	10, // 28: warden.service.v1.WardenSecretService.ListSecrets:input_type -> warden.service.v1.ListSecretsRequest
-	12, // 29: warden.service.v1.WardenSecretService.UpdateSecret:input_type -> warden.service.v1.UpdateSecretRequest
-	14, // 30: warden.service.v1.WardenSecretService.UpdateSecretPassword:input_type -> warden.service.v1.UpdateSecretPasswordRequest
-	16, // 31: warden.service.v1.WardenSecretService.DeleteSecret:input_type -> warden.service.v1.DeleteSecretRequest
-	17, // 32: warden.service.v1.WardenSecretService.MoveSecret:input_type -> warden.service.v1.MoveSecretRequest
-	19, // 33: warden.service.v1.WardenSecretService.ListVersions:input_type -> warden.service.v1.ListVersionsRequest
-	21, // 34: warden.service.v1.WardenSecretService.GetVersion:input_type -> warden.service.v1.GetVersionRequest
-	23, // 35: warden.service.v1.WardenSecretService.RestoreVersion:input_type -> warden.service.v1.RestoreVersionRequest
-	25, // 36: warden.service.v1.WardenSecretService.SearchSecrets:input_type -> warden.service.v1.SearchSecretsRequest
-	5,  // 37: warden.service.v1.WardenSecretService.CreateSecret:output_type -> warden.service.v1.CreateSecretResponse
-	7,  // 38: warden.service.v1.WardenSecretService.GetSecret:output_type -> warden.service.v1.GetSecretResponse
-	9,  // 39: warden.service.v1.WardenSecretService.GetSecretPassword:output_type -> warden.service.v1.GetSecretPasswordResponse
-	11, // 40: warden.service.v1.WardenSecretService.ListSecrets:output_type -> warden.service.v1.ListSecretsResponse
-	13, // 41: warden.service.v1.WardenSecretService.UpdateSecret:output_type -> warden.service.v1.UpdateSecretResponse
-	15, // 42: warden.service.v1.WardenSecretService.UpdateSecretPassword:output_type -> warden.service.v1.UpdateSecretPasswordResponse
-	31, // 43: warden.service.v1.WardenSecretService.DeleteSecret:output_type -> google.protobuf.Empty
-	18, // 44: warden.service.v1.WardenSecretService.MoveSecret:output_type -> warden.service.v1.MoveSecretResponse
-	20, // 45: warden.service.v1.WardenSecretService.ListVersions:output_type -> warden.service.v1.ListVersionsResponse
-	22, // 46: warden.service.v1.WardenSecretService.GetVersion:output_type -> warden.service.v1.GetVersionResponse
-	24, // 47: warden.service.v1.WardenSecretService.RestoreVersion:output_type -> warden.service.v1.RestoreVersionResponse
-	26, // 48: warden.service.v1.WardenSecretService.SearchSecrets:output_type -> warden.service.v1.SearchSecretsResponse
-	37, // [37:49] is the sub-list for method output_type
-	25, // [25:37] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	1,  // 25: warden.service.v1.SetSecretTotpResponse.secret:type_name -> warden.service.v1.Secret
+	4,  // 26: warden.service.v1.WardenSecretService.CreateSecret:input_type -> warden.service.v1.CreateSecretRequest
+	6,  // 27: warden.service.v1.WardenSecretService.GetSecret:input_type -> warden.service.v1.GetSecretRequest
+	8,  // 28: warden.service.v1.WardenSecretService.GetSecretPassword:input_type -> warden.service.v1.GetSecretPasswordRequest
+	10, // 29: warden.service.v1.WardenSecretService.ListSecrets:input_type -> warden.service.v1.ListSecretsRequest
+	12, // 30: warden.service.v1.WardenSecretService.UpdateSecret:input_type -> warden.service.v1.UpdateSecretRequest
+	14, // 31: warden.service.v1.WardenSecretService.UpdateSecretPassword:input_type -> warden.service.v1.UpdateSecretPasswordRequest
+	16, // 32: warden.service.v1.WardenSecretService.DeleteSecret:input_type -> warden.service.v1.DeleteSecretRequest
+	17, // 33: warden.service.v1.WardenSecretService.MoveSecret:input_type -> warden.service.v1.MoveSecretRequest
+	19, // 34: warden.service.v1.WardenSecretService.ListVersions:input_type -> warden.service.v1.ListVersionsRequest
+	21, // 35: warden.service.v1.WardenSecretService.GetVersion:input_type -> warden.service.v1.GetVersionRequest
+	23, // 36: warden.service.v1.WardenSecretService.RestoreVersion:input_type -> warden.service.v1.RestoreVersionRequest
+	25, // 37: warden.service.v1.WardenSecretService.SearchSecrets:input_type -> warden.service.v1.SearchSecretsRequest
+	27, // 38: warden.service.v1.WardenSecretService.GetSecretTotp:input_type -> warden.service.v1.GetSecretTotpRequest
+	29, // 39: warden.service.v1.WardenSecretService.SetSecretTotp:input_type -> warden.service.v1.SetSecretTotpRequest
+	31, // 40: warden.service.v1.WardenSecretService.DeleteSecretTotp:input_type -> warden.service.v1.DeleteSecretTotpRequest
+	5,  // 41: warden.service.v1.WardenSecretService.CreateSecret:output_type -> warden.service.v1.CreateSecretResponse
+	7,  // 42: warden.service.v1.WardenSecretService.GetSecret:output_type -> warden.service.v1.GetSecretResponse
+	9,  // 43: warden.service.v1.WardenSecretService.GetSecretPassword:output_type -> warden.service.v1.GetSecretPasswordResponse
+	11, // 44: warden.service.v1.WardenSecretService.ListSecrets:output_type -> warden.service.v1.ListSecretsResponse
+	13, // 45: warden.service.v1.WardenSecretService.UpdateSecret:output_type -> warden.service.v1.UpdateSecretResponse
+	15, // 46: warden.service.v1.WardenSecretService.UpdateSecretPassword:output_type -> warden.service.v1.UpdateSecretPasswordResponse
+	36, // 47: warden.service.v1.WardenSecretService.DeleteSecret:output_type -> google.protobuf.Empty
+	18, // 48: warden.service.v1.WardenSecretService.MoveSecret:output_type -> warden.service.v1.MoveSecretResponse
+	20, // 49: warden.service.v1.WardenSecretService.ListVersions:output_type -> warden.service.v1.ListVersionsResponse
+	22, // 50: warden.service.v1.WardenSecretService.GetVersion:output_type -> warden.service.v1.GetVersionResponse
+	24, // 51: warden.service.v1.WardenSecretService.RestoreVersion:output_type -> warden.service.v1.RestoreVersionResponse
+	26, // 52: warden.service.v1.WardenSecretService.SearchSecrets:output_type -> warden.service.v1.SearchSecretsResponse
+	28, // 53: warden.service.v1.WardenSecretService.GetSecretTotp:output_type -> warden.service.v1.GetSecretTotpResponse
+	30, // 54: warden.service.v1.WardenSecretService.SetSecretTotp:output_type -> warden.service.v1.SetSecretTotpResponse
+	36, // 55: warden.service.v1.WardenSecretService.DeleteSecretTotp:output_type -> google.protobuf.Empty
+	41, // [41:56] is the sub-list for method output_type
+	26, // [26:41] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_warden_service_v1_secret_proto_init() }
@@ -2090,7 +2406,7 @@ func file_warden_service_v1_secret_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_warden_service_v1_secret_proto_rawDesc), len(file_warden_service_v1_secret_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   26,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

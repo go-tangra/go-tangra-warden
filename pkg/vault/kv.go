@@ -265,6 +265,62 @@ func (s *KVStore) GetCurrentVersion(ctx context.Context, path string) (int, erro
 	return metadata.CurrentVersion, nil
 }
 
+// BuildTotpPath constructs the Vault path for a secret's TOTP data
+func (s *KVStore) BuildTotpPath(tenantID uint32, secretID string) string {
+	return fmt.Sprintf("warden/%d/%s/totp", tenantID, secretID)
+}
+
+// StoreTotpURL stores a TOTP URL in Vault KV v2
+func (s *KVStore) StoreTotpURL(ctx context.Context, path, totpURL string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
+
+	_, err := kv.Put(ctx, path, map[string]any{"totp_url": totpURL})
+	if err != nil {
+		return fmt.Errorf("failed to store TOTP in Vault: %w", err)
+	}
+	return nil
+}
+
+// GetTotpURL retrieves the TOTP URL from Vault
+func (s *KVStore) GetTotpURL(ctx context.Context, path string) (string, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
+
+	secret, err := kv.Get(ctx, path)
+	if err != nil {
+		return "", fmt.Errorf("failed to get TOTP from Vault: %w", err)
+	}
+
+	if secret == nil || secret.Data == nil {
+		return "", fmt.Errorf("no TOTP data found at path: %s", path)
+	}
+
+	totpURL, ok := secret.Data["totp_url"].(string)
+	if !ok {
+		return "", fmt.Errorf("totp_url field not found or invalid type")
+	}
+
+	return totpURL, nil
+}
+
+// DeleteTotp deletes the TOTP data from Vault
+func (s *KVStore) DeleteTotp(ctx context.Context, path string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	kv := s.client.GetClient().KVv2(s.client.GetMountPath())
+
+	if err := kv.DeleteMetadata(ctx, path); err != nil {
+		return fmt.Errorf("failed to delete TOTP from Vault: %w", err)
+	}
+	return nil
+}
+
 // CalculateChecksum calculates SHA-256 checksum of a password
 func CalculateChecksum(password string) string {
 	hash := sha256.Sum256([]byte(password))

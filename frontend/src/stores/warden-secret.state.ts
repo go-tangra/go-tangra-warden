@@ -16,6 +16,8 @@ import {
   type SecretStatus,
   type CreateSecretRequest,
   type UpdateSecretRequest,
+  type GetSecretTotpResponse,
+  type SetSecretTotpResponse,
 } from '../api/services';
 import { wardenApi } from '../api/client';
 import type { Paging } from '../types';
@@ -214,6 +216,19 @@ export const useWardenSecretStore = defineStore('warden-secret', () => {
     });
   }
 
+  // TOTP Authenticator
+  async function getSecretTotp(id: string): Promise<GetSecretTotpResponse> {
+    return SecretService.getTotp(id);
+  }
+
+  async function setSecretTotp(id: string, totpUrl: string): Promise<SetSecretTotpResponse> {
+    return SecretService.setTotp(id, totpUrl);
+  }
+
+  async function deleteSecretTotp(id: string): Promise<void> {
+    return SecretService.deleteTotp(id);
+  }
+
   function $reset() {}
 
   return {
@@ -230,6 +245,10 @@ export const useWardenSecretStore = defineStore('warden-secret', () => {
     moveSecret,
     listVersions,
     searchSecrets,
+    // TOTP
+    getSecretTotp,
+    setSecretTotp,
+    deleteSecretTotp,
     // Bitwarden import/export
     exportToBitwarden,
     importFromBitwarden,

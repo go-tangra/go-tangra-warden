@@ -8,16 +8,15 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 )
 
 // PermissionQuery is the builder for querying Permission entities.
@@ -306,9 +305,8 @@ func (_q *PermissionQuery) Clone() *PermissionQuery {
 		withFolder: _q.withFolder.Clone(),
 		withSecret: _q.withSecret.Clone(),
 		// clone intermediate query.
-		sql:       _q.sql.Clone(),
-		path:      _q.path,
-		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -644,12 +642,6 @@ func (_q *PermissionQuery) ForShare(opts ...sql.LockOption) *PermissionQuery {
 	return _q
 }
 
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_q *PermissionQuery) Modify(modifiers ...func(s *sql.Selector)) *PermissionSelect {
-	_q.modifiers = append(_q.modifiers, modifiers...)
-	return _q.Select()
-}
-
 // PermissionGroupBy is the group-by builder for Permission entities.
 type PermissionGroupBy struct {
 	selector
@@ -738,10 +730,4 @@ func (_s *PermissionSelect) sqlScan(ctx context.Context, root *PermissionQuery, 
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
-}
-
-// Modify adds a query modifier for attaching custom logic to queries.
-func (_s *PermissionSelect) Modify(modifiers ...func(s *sql.Selector)) *PermissionSelect {
-	_s.modifiers = append(_s.modifiers, modifiers...)
-	return _s
 }

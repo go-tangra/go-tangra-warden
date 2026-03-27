@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 )
 
 // Secret is the model entity for the Secret schema.
@@ -51,6 +50,8 @@ type Secret struct {
 	Description string `json:"description,omitempty"`
 	// Secret status
 	Status secret.Status `json:"status,omitempty"`
+	// Whether this secret has a TOTP authenticator configured
+	HasTotp bool `json:"has_totp,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SecretQuery when eager-loading is set.
 	Edges        SecretEdges `json:"edges"`
@@ -106,6 +107,8 @@ func (*Secret) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case secret.FieldMetadata:
 			values[i] = new([]byte)
+		case secret.FieldHasTotp:
+			values[i] = new(sql.NullBool)
 		case secret.FieldCreateBy, secret.FieldUpdateBy, secret.FieldTenantID, secret.FieldCurrentVersion:
 			values[i] = new(sql.NullInt64)
 		case secret.FieldID, secret.FieldFolderID, secret.FieldName, secret.FieldUsername, secret.FieldHostURL, secret.FieldVaultPath, secret.FieldDescription, secret.FieldStatus:
@@ -232,6 +235,12 @@ func (_m *Secret) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Status = secret.Status(value.String)
 			}
+		case secret.FieldHasTotp:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field has_totp", values[i])
+			} else if value.Valid {
+				_m.HasTotp = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -341,6 +350,9 @@ func (_m *Secret) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))
+	builder.WriteString(", ")
+	builder.WriteString("has_totp=")
+	builder.WriteString(fmt.Sprintf("%v", _m.HasTotp))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -5,12 +5,11 @@ package ent
 import (
 	"context"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 )
 
 // SecretVersionDelete is the builder for deleting a SecretVersion entity.

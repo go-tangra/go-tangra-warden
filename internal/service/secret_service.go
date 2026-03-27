@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -205,6 +208,19 @@ func (s *SecretService) CreateSecret(ctx context.Context, req *wardenV1.CreateSe
 		_, err = s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeSecret), secretEntity.ID, relation, subjectType, perm.SubjectId, createdBy, nil)
 		if err != nil {
 			s.log.Warnf("failed to grant initial permission to %s/%s: %v", perm.SubjectType, perm.SubjectId, err)
+		}
+	}
+
+	// Store TOTP in Vault if provided
+	if req.TotpUrl != "" {
+		totpPath := s.kvStore.BuildTotpPath(tenantID, secretEntity.ID)
+		if _, _, _, err := generateTOTPCode(req.TotpUrl); err != nil {
+			s.log.Warnf("invalid TOTP URL provided during creation: %v", err)
+		} else if err := s.kvStore.StoreTotpURL(ctx, totpPath, req.TotpUrl); err != nil {
+			s.log.Warnf("failed to store TOTP in Vault: %v", err)
+		} else {
+			_ = s.secretRepo.SetHasTotp(ctx, tenantID, secretEntity.ID, true)
+			secretEntity, _ = s.secretRepo.GetByIDAndTenant(ctx, tenantID, secretEntity.ID)
 		}
 	}
 
@@ -468,6 +484,14 @@ func (s *SecretService) DeleteSecret(ctx context.Context, req *wardenV1.DeleteSe
 			s.log.Warnf("failed to destroy password in Vault: %v", err)
 		}
 
+		// Delete TOTP from Vault if configured
+		if secretEntity.HasTotp {
+			totpPath := s.kvStore.BuildTotpPath(tenantID, req.Id)
+			if err := s.kvStore.DeleteTotp(ctx, totpPath); err != nil {
+				s.log.Warnf("failed to delete TOTP from Vault: %v", err)
+			}
+		}
+
 		// Delete version records
 		if err := s.versionRepo.DeleteBySecretID(ctx, req.Id); err != nil {
 			s.log.Warnf("failed to delete version records: %v", err)
@@ -699,6 +723,119 @@ func (s *SecretService) SearchSecrets(ctx context.Context, req *wardenV1.SearchS
 	}, nil
 }
 
+// GetSecretTotp returns the TOTP code and remaining seconds for a secret.
+func (s *SecretService) GetSecretTotp(ctx context.Context, req *wardenV1.GetSecretTotpRequest) (*wardenV1.GetSecretTotpResponse, error) {
+	tenantID := getTenantIDFromContext(ctx)
+	userID := getUserIDFromContext(ctx)
+
+	if err := s.checker.CanReadSecret(ctx, tenantID, userID, req.Id); err != nil {
+		return nil, wardenV1.ErrorAccessDenied("no permission to access this secret")
+	}
+
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	if secretEntity == nil {
+		return nil, wardenV1.ErrorSecretNotFound("secret not found")
+	}
+	if !secretEntity.HasTotp {
+		return nil, wardenV1.ErrorBadRequest("secret has no TOTP configured")
+	}
+
+	totpPath := s.kvStore.BuildTotpPath(tenantID, req.Id)
+	totpURL, err := s.kvStore.GetTotpURL(ctx, totpPath)
+	if err != nil {
+		return nil, wardenV1.ErrorInternalServerError("failed to retrieve TOTP")
+	}
+
+	code, remaining, period, err := generateTOTPCode(totpURL)
+	if err != nil {
+		return nil, wardenV1.ErrorInternalServerError("failed to generate TOTP code")
+	}
+
+	return &wardenV1.GetSecretTotpResponse{
+		TotpUrl:          totpURL,
+		CurrentCode:      code,
+		RemainingSeconds: int32(remaining),
+		Period:           int32(period),
+	}, nil
+}
+
+// SetSecretTotp sets or updates the TOTP authenticator for a secret.
+func (s *SecretService) SetSecretTotp(ctx context.Context, req *wardenV1.SetSecretTotpRequest) (*wardenV1.SetSecretTotpResponse, error) {
+	tenantID := getTenantIDFromContext(ctx)
+	userID := getUserIDFromContext(ctx)
+
+	if err := s.checker.CanWriteSecret(ctx, tenantID, userID, req.Id); err != nil {
+		return nil, wardenV1.ErrorAccessDenied("no permission to modify this secret")
+	}
+
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	if secretEntity == nil {
+		return nil, wardenV1.ErrorSecretNotFound("secret not found")
+	}
+
+	// Validate the TOTP URL by generating a test code
+	code, _, _, err := generateTOTPCode(req.TotpUrl)
+	if err != nil {
+		return nil, wardenV1.ErrorBadRequest("invalid TOTP URL or secret")
+	}
+
+	// Store in Vault
+	totpPath := s.kvStore.BuildTotpPath(tenantID, req.Id)
+	if err := s.kvStore.StoreTotpURL(ctx, totpPath, req.TotpUrl); err != nil {
+		return nil, wardenV1.ErrorInternalServerError("failed to store TOTP")
+	}
+
+	// Update has_totp flag
+	if err := s.secretRepo.SetHasTotp(ctx, tenantID, req.Id, true); err != nil {
+		s.log.Warnf("failed to set has_totp flag: %v", err)
+	}
+
+	// Reload entity for response
+	secretEntity, _ = s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
+
+	return &wardenV1.SetSecretTotpResponse{
+		Secret:           s.secretRepo.ToProto(secretEntity),
+		VerificationCode: code,
+	}, nil
+}
+
+// DeleteSecretTotp removes the TOTP authenticator from a secret.
+func (s *SecretService) DeleteSecretTotp(ctx context.Context, req *wardenV1.DeleteSecretTotpRequest) (*emptypb.Empty, error) {
+	tenantID := getTenantIDFromContext(ctx)
+	userID := getUserIDFromContext(ctx)
+
+	if err := s.checker.CanWriteSecret(ctx, tenantID, userID, req.Id); err != nil {
+		return nil, wardenV1.ErrorAccessDenied("no permission to modify this secret")
+	}
+
+	secretEntity, err := s.secretRepo.GetByIDAndTenant(ctx, tenantID, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	if secretEntity == nil {
+		return nil, wardenV1.ErrorSecretNotFound("secret not found")
+	}
+
+	// Delete from Vault
+	totpPath := s.kvStore.BuildTotpPath(tenantID, req.Id)
+	if err := s.kvStore.DeleteTotp(ctx, totpPath); err != nil {
+		s.log.Warnf("failed to delete TOTP from Vault: %v", err)
+	}
+
+	// Update has_totp flag
+	if err := s.secretRepo.SetHasTotp(ctx, tenantID, req.Id, false); err != nil {
+		s.log.Warnf("failed to clear has_totp flag: %v", err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
 // Helper functions
 
 func mapProtoStatusToEnt(status wardenV1.SecretStatus) secret.Status {
@@ -716,4 +853,37 @@ func mapProtoStatusToEnt(status wardenV1.SecretStatus) secret.Status {
 
 func generateUUID() string {
 	return uuid.New().String()
+}
+
+// generateTOTPCode generates the current TOTP code from a URL or base32 secret.
+// Returns: code, remaining seconds, period, error.
+func generateTOTPCode(totpURL string) (string, int, int, error) {
+	var secret string
+	period := 30
+
+	if strings.HasPrefix(totpURL, "otpauth://") {
+		key, err := otp.NewKeyFromURL(totpURL)
+		if err != nil {
+			return "", 0, 0, fmt.Errorf("invalid otpauth URL: %w", err)
+		}
+		secret = key.Secret()
+		if p := key.Period(); p > 0 {
+			period = int(p)
+		}
+	} else {
+		// Treat as raw base32 secret
+		secret = strings.TrimSpace(strings.ToUpper(totpURL))
+	}
+
+	now := time.Now()
+	code, err := totp.GenerateCodeCustom(secret, now, totp.ValidateOpts{
+		Period: uint(period),
+		Digits: otp.DigitsSix,
+	})
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("generate TOTP code: %w", err)
+	}
+
+	remaining := period - int(now.Unix()%int64(period))
+	return code, remaining, period, nil
 }

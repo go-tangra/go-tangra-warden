@@ -73,6 +73,10 @@ func (Secret) Fields() []ent.Field {
 			Values("SECRET_STATUS_UNSPECIFIED", "SECRET_STATUS_ACTIVE", "SECRET_STATUS_ARCHIVED", "SECRET_STATUS_DELETED").
 			Default("SECRET_STATUS_ACTIVE").
 			Comment("Secret status"),
+
+		field.Bool("has_totp").
+			Default(false).
+			Comment("Whether this secret has a TOTP authenticator configured"),
 	}
 }
 

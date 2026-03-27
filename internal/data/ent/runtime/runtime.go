@@ -244,6 +244,10 @@ func init() {
 	secretDescDescription := secretFields[8].Descriptor()
 	// secret.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	secret.DescriptionValidator = secretDescDescription.Validators[0].(func(string) error)
+	// secretDescHasTotp is the schema descriptor for has_totp field.
+	secretDescHasTotp := secretFields[10].Descriptor()
+	// secret.DefaultHasTotp holds the default value on creation for the has_totp field.
+	secret.DefaultHasTotp = secretDescHasTotp.Default.(bool)
 	// secretDescID is the schema descriptor for id field.
 	secretDescID := secretFields[0].Descriptor()
 	// secret.IDValidator is a validator for the "id" field. It is called by the builders before save.

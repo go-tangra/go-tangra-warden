@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 )
 
 // SecretVersion is the model entity for the SecretVersion schema.

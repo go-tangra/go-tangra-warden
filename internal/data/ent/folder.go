@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
 )
 
 // Folder is the model entity for the Folder schema.

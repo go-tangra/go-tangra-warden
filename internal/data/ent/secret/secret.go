@@ -45,6 +45,8 @@ const (
 	FieldDescription = "description"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldHasTotp holds the string denoting the has_totp field in the database.
+	FieldHasTotp = "has_totp"
 	// EdgeFolder holds the string denoting the folder edge name in mutations.
 	EdgeFolder = "folder"
 	// EdgeVersions holds the string denoting the versions edge name in mutations.
@@ -94,6 +96,7 @@ var Columns = []string{
 	FieldMetadata,
 	FieldDescription,
 	FieldStatus,
+	FieldHasTotp,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -128,6 +131,8 @@ var (
 	DefaultCurrentVersion int32
 	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	DescriptionValidator func(string) error
+	// DefaultHasTotp holds the default value on creation for the "has_totp" field.
+	DefaultHasTotp bool
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -236,6 +241,11 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByHasTotp orders the results by the has_totp field.
+func ByHasTotp(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHasTotp, opts...).ToFunc()
 }
 
 // ByFolderField orders the results by folder field.

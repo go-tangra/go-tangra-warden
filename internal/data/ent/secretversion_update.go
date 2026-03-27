@@ -8,21 +8,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
+	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
 )
 
 // SecretVersionUpdate is the builder for updating SecretVersion entities.
 type SecretVersionUpdate struct {
 	config
-	hooks     []Hook
-	mutation  *SecretVersionMutation
-	modifiers []func(*sql.UpdateBuilder)
+	hooks    []Hook
+	mutation *SecretVersionMutation
 }
 
 // Where appends a list predicates to the SecretVersionUpdate builder.
@@ -257,12 +255,6 @@ func (_u *SecretVersionUpdate) check() error {
 	return nil
 }
 
-// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
-func (_u *SecretVersionUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SecretVersionUpdate {
-	_u.modifiers = append(_u.modifiers, modifiers...)
-	return _u
-}
-
 func (_u *SecretVersionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -346,7 +338,6 @@ func (_u *SecretVersionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{secretversion.Label}
@@ -362,10 +353,9 @@ func (_u *SecretVersionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 // SecretVersionUpdateOne is the builder for updating a single SecretVersion entity.
 type SecretVersionUpdateOne struct {
 	config
-	fields    []string
-	hooks     []Hook
-	mutation  *SecretVersionMutation
-	modifiers []func(*sql.UpdateBuilder)
+	fields   []string
+	hooks    []Hook
+	mutation *SecretVersionMutation
 }
 
 // SetCreateBy sets the "create_by" field.
@@ -607,12 +597,6 @@ func (_u *SecretVersionUpdateOne) check() error {
 	return nil
 }
 
-// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
-func (_u *SecretVersionUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SecretVersionUpdateOne {
-	_u.modifiers = append(_u.modifiers, modifiers...)
-	return _u
-}
-
 func (_u *SecretVersionUpdateOne) sqlSave(ctx context.Context) (_node *SecretVersion, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -713,7 +697,6 @@ func (_u *SecretVersionUpdateOne) sqlSave(ctx context.Context) (_node *SecretVer
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_spec.AddModifiers(_u.modifiers...)
 	_node = &SecretVersion{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

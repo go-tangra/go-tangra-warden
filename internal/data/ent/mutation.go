@@ -9,15 +9,14 @@ import (
 	"sync"
 	"time"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/auditlog"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect/sql"
 )
 
 const (
@@ -4480,6 +4479,7 @@ type SecretMutation struct {
 	metadata           *map[string]interface{}
 	description        *string
 	status             *secret.Status
+	has_totp           *bool
 	clearedFields      map[string]struct{}
 	folder             *string
 	clearedfolder      bool
@@ -5364,6 +5364,42 @@ func (m *SecretMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetHasTotp sets the "has_totp" field.
+func (m *SecretMutation) SetHasTotp(b bool) {
+	m.has_totp = &b
+}
+
+// HasTotp returns the value of the "has_totp" field in the mutation.
+func (m *SecretMutation) HasTotp() (r bool, exists bool) {
+	v := m.has_totp
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasTotp returns the old "has_totp" field's value of the Secret entity.
+// If the Secret object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecretMutation) OldHasTotp(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasTotp is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasTotp requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasTotp: %w", err)
+	}
+	return oldValue.HasTotp, nil
+}
+
+// ResetHasTotp resets all changes to the "has_totp" field.
+func (m *SecretMutation) ResetHasTotp() {
+	m.has_totp = nil
+}
+
 // ClearFolder clears the "folder" edge to the Folder entity.
 func (m *SecretMutation) ClearFolder() {
 	m.clearedfolder = true
@@ -5533,7 +5569,7 @@ func (m *SecretMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SecretMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.create_by != nil {
 		fields = append(fields, secret.FieldCreateBy)
 	}
@@ -5579,6 +5615,9 @@ func (m *SecretMutation) Fields() []string {
 	if m.status != nil {
 		fields = append(fields, secret.FieldStatus)
 	}
+	if m.has_totp != nil {
+		fields = append(fields, secret.FieldHasTotp)
+	}
 	return fields
 }
 
@@ -5617,6 +5656,8 @@ func (m *SecretMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case secret.FieldStatus:
 		return m.Status()
+	case secret.FieldHasTotp:
+		return m.HasTotp()
 	}
 	return nil, false
 }
@@ -5656,6 +5697,8 @@ func (m *SecretMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDescription(ctx)
 	case secret.FieldStatus:
 		return m.OldStatus(ctx)
+	case secret.FieldHasTotp:
+		return m.OldHasTotp(ctx)
 	}
 	return nil, fmt.Errorf("unknown Secret field %s", name)
 }
@@ -5769,6 +5812,13 @@ func (m *SecretMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case secret.FieldHasTotp:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasTotp(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Secret field %s", name)
@@ -5983,6 +6033,9 @@ func (m *SecretMutation) ResetField(name string) error {
 		return nil
 	case secret.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case secret.FieldHasTotp:
+		m.ResetHasTotp()
 		return nil
 	}
 	return fmt.Errorf("unknown Secret field %s", name)

@@ -11,16 +11,15 @@ import (
 
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/migrate"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/auditlog"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect"
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // Client is the client that holds all ent builders.

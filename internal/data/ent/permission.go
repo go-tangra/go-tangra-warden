@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect/sql"
 )
 
 // Permission is the model entity for the Permission schema.

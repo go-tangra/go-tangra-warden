@@ -8,23 +8,21 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/schema/field"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/folder"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/permission"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/predicate"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secretversion"
-
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 )
 
 // SecretUpdate is the builder for updating Secret entities.
 type SecretUpdate struct {
 	config
-	hooks     []Hook
-	mutation  *SecretMutation
-	modifiers []func(*sql.UpdateBuilder)
+	hooks    []Hook
+	mutation *SecretMutation
 }
 
 // Where appends a list predicates to the SecretUpdate builder.
@@ -282,6 +280,20 @@ func (_u *SecretUpdate) SetNillableStatus(v *secret.Status) *SecretUpdate {
 	return _u
 }
 
+// SetHasTotp sets the "has_totp" field.
+func (_u *SecretUpdate) SetHasTotp(v bool) *SecretUpdate {
+	_u.mutation.SetHasTotp(v)
+	return _u
+}
+
+// SetNillableHasTotp sets the "has_totp" field if the given value is not nil.
+func (_u *SecretUpdate) SetNillableHasTotp(v *bool) *SecretUpdate {
+	if v != nil {
+		_u.SetHasTotp(*v)
+	}
+	return _u
+}
+
 // SetFolder sets the "folder" edge to the Folder entity.
 func (_u *SecretUpdate) SetFolder(v *Folder) *SecretUpdate {
 	return _u.SetFolderID(v.ID)
@@ -432,12 +444,6 @@ func (_u *SecretUpdate) check() error {
 	return nil
 }
 
-// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
-func (_u *SecretUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SecretUpdate {
-	_u.modifiers = append(_u.modifiers, modifiers...)
-	return _u
-}
-
 func (_u *SecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -524,6 +530,9 @@ func (_u *SecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(secret.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.HasTotp(); ok {
+		_spec.SetField(secret.FieldHasTotp, field.TypeBool, value)
 	}
 	if _u.mutation.FolderCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -644,7 +653,6 @@ func (_u *SecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{secret.Label}
@@ -660,10 +668,9 @@ func (_u *SecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // SecretUpdateOne is the builder for updating a single Secret entity.
 type SecretUpdateOne struct {
 	config
-	fields    []string
-	hooks     []Hook
-	mutation  *SecretMutation
-	modifiers []func(*sql.UpdateBuilder)
+	fields   []string
+	hooks    []Hook
+	mutation *SecretMutation
 }
 
 // SetCreateBy sets the "create_by" field.
@@ -915,6 +922,20 @@ func (_u *SecretUpdateOne) SetNillableStatus(v *secret.Status) *SecretUpdateOne 
 	return _u
 }
 
+// SetHasTotp sets the "has_totp" field.
+func (_u *SecretUpdateOne) SetHasTotp(v bool) *SecretUpdateOne {
+	_u.mutation.SetHasTotp(v)
+	return _u
+}
+
+// SetNillableHasTotp sets the "has_totp" field if the given value is not nil.
+func (_u *SecretUpdateOne) SetNillableHasTotp(v *bool) *SecretUpdateOne {
+	if v != nil {
+		_u.SetHasTotp(*v)
+	}
+	return _u
+}
+
 // SetFolder sets the "folder" edge to the Folder entity.
 func (_u *SecretUpdateOne) SetFolder(v *Folder) *SecretUpdateOne {
 	return _u.SetFolderID(v.ID)
@@ -1078,12 +1099,6 @@ func (_u *SecretUpdateOne) check() error {
 	return nil
 }
 
-// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
-func (_u *SecretUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SecretUpdateOne {
-	_u.modifiers = append(_u.modifiers, modifiers...)
-	return _u
-}
-
 func (_u *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -1187,6 +1202,9 @@ func (_u *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err erro
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(secret.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.HasTotp(); ok {
+		_spec.SetField(secret.FieldHasTotp, field.TypeBool, value)
 	}
 	if _u.mutation.FolderCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1307,7 +1325,6 @@ func (_u *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err erro
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_spec.AddModifiers(_u.modifiers...)
 	_node = &Secret{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
