@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { LucideEye, LucideEyeOff, LucideCopy, LucidePlus, LucideTrash } from 'shell/vben/icons';
@@ -98,12 +98,22 @@ async function loadTotp() {
   }
 }
 
+let totpRefreshing = false;
+
 function startTotpTimer() {
   stopTotpTimer();
-  totpTimer = setInterval(() => {
-    totpRemaining.value--;
-    if (totpRemaining.value <= 0) {
-      loadTotp();
+  totpTimer = setInterval(async () => {
+    if (totpRemaining.value > 1) {
+      totpRemaining.value--;
+      return;
+    }
+    // Prevent concurrent refreshes
+    if (totpRefreshing) return;
+    totpRefreshing = true;
+    try {
+      await loadTotp();
+    } finally {
+      totpRefreshing = false;
     }
   }, 1000);
 }
@@ -113,7 +123,10 @@ function stopTotpTimer() {
     clearInterval(totpTimer);
     totpTimer = null;
   }
+  totpRefreshing = false;
 }
+
+onUnmounted(() => stopTotpTimer());
 
 async function handleCopyTotp() {
   if (!totpCode.value) await loadTotp();
