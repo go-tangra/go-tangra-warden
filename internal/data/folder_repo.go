@@ -151,7 +151,7 @@ func (r *FolderRepo) List(ctx context.Context, tenantID uint32, parentID *string
 	}
 
 	if nameFilter != nil && *nameFilter != "" {
-		query = query.Where(folder.NameContains(*nameFilter))
+		query = query.Where(folder.NameContainsFold(*nameFilter))
 	}
 
 	// Count total
