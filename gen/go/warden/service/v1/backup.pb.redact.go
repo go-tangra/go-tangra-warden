@@ -91,6 +91,8 @@ func (x *ExportBackupResponse) Redact() string {
 	// Safe field: TenantId
 
 	// Safe field: EntityCounts
+
+	// Safe field: SchemaVersion
 	return x.String()
 }
 
@@ -117,6 +119,12 @@ func (x *ImportBackupResponse) Redact() string {
 	// Safe field: Results
 
 	// Safe field: Warnings
+
+	// Safe field: SourceVersion
+
+	// Safe field: TargetVersion
+
+	// Safe field: MigrationsApplied
 	return x.String()
 }
 

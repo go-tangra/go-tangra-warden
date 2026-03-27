@@ -204,6 +204,8 @@ func (m *ExportBackupResponse) validate(all bool) error {
 
 	// no validation rules for EntityCounts
 
+	// no validation rules for SchemaVersion
+
 	if len(errors) > 0 {
 		return ExportBackupResponseMultiError(errors)
 	}
@@ -447,6 +449,12 @@ func (m *ImportBackupResponse) validate(all bool) error {
 		}
 
 	}
+
+	// no validation rules for SourceVersion
+
+	// no validation rules for TargetVersion
+
+	// no validation rules for MigrationsApplied
 
 	if len(errors) > 0 {
 		return ImportBackupResponseMultiError(errors)
