@@ -158,7 +158,7 @@ func (r *SecretRepo) List(ctx context.Context, tenantID uint32, folderID *string
 	}
 
 	if nameFilter != nil && *nameFilter != "" {
-		query = query.Where(secret.NameContains(*nameFilter))
+		query = query.Where(secret.NameContainsFold(*nameFilter))
 	}
 
 	// Count total
@@ -359,10 +359,10 @@ func (r *SecretRepo) Search(ctx context.Context, tenantID uint32, query string, 
 
 	// Add search predicates
 	searchPredicate := secret.Or(
-		secret.NameContains(query),
-		secret.UsernameContains(query),
-		secret.HostURLContains(query),
-		secret.DescriptionContains(query),
+		secret.NameContainsFold(query),
+		secret.UsernameContainsFold(query),
+		secret.HostURLContainsFold(query),
+		secret.DescriptionContainsFold(query),
 	)
 	q = q.Where(searchPredicate)
 
