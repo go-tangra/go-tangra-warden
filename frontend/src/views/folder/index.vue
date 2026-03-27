@@ -121,14 +121,14 @@ onMounted(() => {
 });
 
 // Handle folder selection — clear any active search filter
-function handleFolderSelect(keys: Key[]) {
+async function handleFolderSelect(keys: Key[]) {
   if (keys.length > 0) {
     selectedFolderId.value = String(keys[0]);
   } else {
     selectedFolderId.value = undefined;
   }
-  gridApi.formApi?.resetForm();
-  gridApi.reload();
+  await gridApi.formApi?.setValues({ nameFilter: '' });
+  gridApi.query();
 }
 
 // Secret list
@@ -533,8 +533,8 @@ const selectedFolderName = computed(() => {
           :class="{ 'bg-accent': !selectedFolderId }"
           @click="
             selectedFolderId = undefined;
-            gridApi.formApi?.resetForm();
-            gridApi.reload();
+            gridApi.formApi?.setValues({ nameFilter: '' });
+            gridApi.query();
           "
         >
           <component :is="LucideFolderOpen" class="size-4" />
