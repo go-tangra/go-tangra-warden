@@ -809,6 +809,49 @@ const secret = computed(() => data.value?.row);
           </Button>
         </FormItem>
       </Form>
+
+      <Divider>2FA / TOTP</Divider>
+      <div v-if="data?.row?.hasTotp">
+        <Space align="center" style="margin-bottom: 12px">
+          <span
+            style="font-family: monospace; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1890ff"
+          >{{ totpCode || '------' }}</span>
+          <span style="font-size: 12px; color: #999; min-width: 32px">
+            {{ totpRemaining }}s
+          </span>
+          <Button
+            type="text"
+            size="small"
+            :icon="h(LucideCopy)"
+            @click="handleCopyTotp"
+          />
+        </Space>
+        <div>
+          <Button size="small" danger @click="handleDeleteTotp">
+            Remove TOTP
+          </Button>
+        </div>
+      </div>
+      <div v-else>
+        <Space>
+          <Input
+            v-model:value="newTotpUrl"
+            size="small"
+            placeholder="otpauth:// URL or base32 secret"
+            style="width: 280px"
+            @press-enter="handleSetTotp"
+          />
+          <Button
+            size="small"
+            type="primary"
+            :loading="settingTotp"
+            :disabled="!newTotpUrl"
+            @click="handleSetTotp"
+          >
+            Set TOTP
+          </Button>
+        </Space>
+      </div>
     </template>
   </Drawer>
 </template>
