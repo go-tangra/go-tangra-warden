@@ -120,15 +120,18 @@ onMounted(() => {
   loadFolderTree();
 });
 
+// Track whether folder click should clear the search filter
+let clearFilterOnNextQuery = false;
+
 // Handle folder selection — clear any active search filter
-async function handleFolderSelect(keys: Key[]) {
+function handleFolderSelect(keys: Key[]) {
   if (keys.length > 0) {
     selectedFolderId.value = String(keys[0]);
   } else {
     selectedFolderId.value = undefined;
   }
-  await gridApi.formApi?.setValues({ nameFilter: '' });
-  gridApi.query();
+  clearFilterOnNextQuery = true;
+  gridApi.reload();
 }
 
 // Secret list
@@ -172,11 +175,19 @@ const gridOptions: VxeGridProps<Secret> = {
   proxyConfig: {
     ajax: {
       query: async ({ page }, formValues) => {
+        // When a folder is clicked, ignore the stale form filter
+        let nameFilter = formValues?.nameFilter;
+        if (clearFilterOnNextQuery) {
+          nameFilter = undefined;
+          clearFilterOnNextQuery = false;
+          // Also clear the visible input
+          gridApi.formApi?.setValues({ nameFilter: '' });
+        }
         const resp = await secretStore.listSecrets(
           { page: page.currentPage, pageSize: page.pageSize },
           {
             folderId: selectedFolderId.value,
-            nameFilter: formValues?.nameFilter,
+            nameFilter,
           },
         );
         return {
@@ -533,8 +544,8 @@ const selectedFolderName = computed(() => {
           :class="{ 'bg-accent': !selectedFolderId }"
           @click="
             selectedFolderId = undefined;
-            gridApi.formApi?.setValues({ nameFilter: '' });
-            gridApi.query();
+            clearFilterOnNextQuery = true;
+            gridApi.reload();
           "
         >
           <component :is="LucideFolderOpen" class="size-4" />
