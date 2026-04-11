@@ -8,6 +8,9 @@ import (
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	sharingpb "buf.build/gen/go/go-tangra/sharing/protocolbuffers/go/sharing/service/v1"
+
+	"github.com/go-tangra/go-tangra-warden/internal/client"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
 	"github.com/go-tangra/go-tangra-warden/internal/data/ent/secret"
 	"github.com/go-tangra/go-tangra-warden/pkg/vault"
@@ -27,20 +30,23 @@ var (
 type SystemService struct {
 	wardenV1.UnimplementedWardenSystemServiceServer
 
-	log       *log.Helper
-	vaultClient *vault.Client
-	statsRepo *data.StatisticsRepo
+	log           *log.Helper
+	vaultClient   *vault.Client
+	statsRepo     *data.StatisticsRepo
+	sharingClient *client.SharingClient
 }
 
 func NewSystemService(
 	ctx *bootstrap.Context,
 	vaultClient *vault.Client,
 	statsRepo *data.StatisticsRepo,
+	sharingClient *client.SharingClient,
 ) *SystemService {
 	return &SystemService{
-		log:         ctx.NewLoggerHelper("warden/service/system"),
-		vaultClient: vaultClient,
-		statsRepo:   statsRepo,
+		log:           ctx.NewLoggerHelper("warden/service/system"),
+		vaultClient:   vaultClient,
+		statsRepo:     statsRepo,
+		sharingClient: sharingClient,
 	}
 }
 
@@ -197,5 +203,38 @@ func (s *SystemService) CheckVault(ctx context.Context, _ *emptypb.Empty) (*ward
 		VaultVersion: health.Version,
 		Sealed:       health.Sealed,
 		Message:      "connection successful",
+	}, nil
+}
+
+// CreateShareSecret creates a share link for a secret by proxying to the sharing service.
+func (s *SystemService) CreateShareSecret(ctx context.Context, req *wardenV1.CreateShareSecretRequest) (*wardenV1.CreateShareSecretResponse, error) {
+	// Convert warden policy inputs to sharing proto policies
+	policies := make([]*sharingpb.CreateSharePolicyInput, 0, len(req.GetPolicies()))
+	for _, p := range req.GetPolicies() {
+		policies = append(policies, &sharingpb.CreateSharePolicyInput{
+			Type:   sharingpb.SharePolicyType(p.GetType()),
+			Method: sharingpb.SharePolicyMethod(p.GetMethod()),
+			Value:  p.GetValue(),
+			Reason: p.GetReason(),
+		})
+	}
+
+	sharingReq := &sharingpb.CreateShareRequest{
+		ResourceType:   sharingpb.ResourceType_RESOURCE_TYPE_SECRET,
+		ResourceId:     req.GetResourceId(),
+		RecipientEmail: req.GetRecipientEmail(),
+		Message:        req.GetMessage(),
+		Policies:       policies,
+	}
+
+	resp, err := s.sharingClient.CreateShare(ctx, sharingReq)
+	if err != nil {
+		s.log.Errorf("Failed to create share via sharing service: %v", err)
+		return nil, err
+	}
+
+	return &wardenV1.CreateShareSecretResponse{
+		ShareId:   resp.GetShareId(),
+		ShareLink: resp.GetShareLink(),
 	}, nil
 }

@@ -3,7 +3,9 @@ module github.com/go-tangra/go-tangra-warden
 go 1.25.4
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20251209175733-2a1774d88802.1
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1
+	buf.build/gen/go/go-tangra/sharing/grpc/go v1.6.1-20260327215529-9750c8e073c6.1
+	buf.build/gen/go/go-tangra/sharing/protocolbuffers/go v1.36.11-20260327215529-9750c8e073c6.1
 	entgo.io/ent v0.14.5
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/go-sql-driver/mysql v1.9.3
@@ -15,6 +17,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/lib/pq v1.10.9
 	github.com/menta2k/protoc-gen-redact/v3 v3.0.0-20251106150014-896cdd075ab1
+	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/tx7do/go-crud/api v0.0.7
@@ -30,6 +33,8 @@ require (
 
 require (
 	ariga.io/atlas v1.0.0 // indirect
+	buf.build/gen/go/kratos/apis/protocolbuffers/go v1.36.11-20230105082401-c2de25f14fa4.1 // indirect
+	buf.build/gen/go/menta2k-org/redact/protocolbuffers/go v1.36.11-20251106144841-73f00ca72edd.1 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/XSAM/otelsql v0.41.0 // indirect
@@ -89,7 +94,6 @@ require (
 	github.com/olekukonko/ll v0.1.3 // indirect
 	github.com/olekukonko/tablewriter v1.1.2 // indirect
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
-	github.com/pquerna/otp v1.5.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect

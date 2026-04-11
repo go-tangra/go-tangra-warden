@@ -611,6 +611,362 @@ var _ interface {
 	ErrorName() string
 } = GetStatsRequestValidationError{}
 
+// Validate checks the field values on SharePolicyInput with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *SharePolicyInput) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SharePolicyInput with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// SharePolicyInputMultiError, or nil if none found.
+func (m *SharePolicyInput) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SharePolicyInput) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Type
+
+	// no validation rules for Method
+
+	// no validation rules for Value
+
+	// no validation rules for Reason
+
+	if len(errors) > 0 {
+		return SharePolicyInputMultiError(errors)
+	}
+
+	return nil
+}
+
+// SharePolicyInputMultiError is an error wrapping multiple validation errors
+// returned by SharePolicyInput.ValidateAll() if the designated constraints
+// aren't met.
+type SharePolicyInputMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SharePolicyInputMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SharePolicyInputMultiError) AllErrors() []error { return m }
+
+// SharePolicyInputValidationError is the validation error returned by
+// SharePolicyInput.Validate if the designated constraints aren't met.
+type SharePolicyInputValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SharePolicyInputValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SharePolicyInputValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SharePolicyInputValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SharePolicyInputValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SharePolicyInputValidationError) ErrorName() string { return "SharePolicyInputValidationError" }
+
+// Error satisfies the builtin error interface
+func (e SharePolicyInputValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSharePolicyInput.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SharePolicyInputValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SharePolicyInputValidationError{}
+
+// Validate checks the field values on CreateShareSecretRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *CreateShareSecretRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateShareSecretRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateShareSecretRequestMultiError, or nil if none found.
+func (m *CreateShareSecretRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateShareSecretRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for ResourceId
+
+	// no validation rules for RecipientEmail
+
+	// no validation rules for Message
+
+	for idx, item := range m.GetPolicies() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CreateShareSecretRequestValidationError{
+						field:  fmt.Sprintf("Policies[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CreateShareSecretRequestValidationError{
+						field:  fmt.Sprintf("Policies[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CreateShareSecretRequestValidationError{
+					field:  fmt.Sprintf("Policies[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return CreateShareSecretRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// CreateShareSecretRequestMultiError is an error wrapping multiple validation
+// errors returned by CreateShareSecretRequest.ValidateAll() if the designated
+// constraints aren't met.
+type CreateShareSecretRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateShareSecretRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateShareSecretRequestMultiError) AllErrors() []error { return m }
+
+// CreateShareSecretRequestValidationError is the validation error returned by
+// CreateShareSecretRequest.Validate if the designated constraints aren't met.
+type CreateShareSecretRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateShareSecretRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateShareSecretRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateShareSecretRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateShareSecretRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateShareSecretRequestValidationError) ErrorName() string {
+	return "CreateShareSecretRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateShareSecretRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateShareSecretRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateShareSecretRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateShareSecretRequestValidationError{}
+
+// Validate checks the field values on CreateShareSecretResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *CreateShareSecretResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CreateShareSecretResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// CreateShareSecretResponseMultiError, or nil if none found.
+func (m *CreateShareSecretResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CreateShareSecretResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for ShareId
+
+	// no validation rules for ShareLink
+
+	if len(errors) > 0 {
+		return CreateShareSecretResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// CreateShareSecretResponseMultiError is an error wrapping multiple validation
+// errors returned by CreateShareSecretResponse.ValidateAll() if the
+// designated constraints aren't met.
+type CreateShareSecretResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CreateShareSecretResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CreateShareSecretResponseMultiError) AllErrors() []error { return m }
+
+// CreateShareSecretResponseValidationError is the validation error returned by
+// CreateShareSecretResponse.Validate if the designated constraints aren't met.
+type CreateShareSecretResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CreateShareSecretResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CreateShareSecretResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CreateShareSecretResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CreateShareSecretResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CreateShareSecretResponseValidationError) ErrorName() string {
+	return "CreateShareSecretResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e CreateShareSecretResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCreateShareSecretResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CreateShareSecretResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CreateShareSecretResponseValidationError{}
+
 // Validate checks the field values on GetStatsResponse with the rules defined
 // in the proto definition for this message. If any rules are violated, the
 // first error encountered is returned, or nil if there are no violations.

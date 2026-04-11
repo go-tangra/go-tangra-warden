@@ -20,10 +20,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WardenSystemService_Health_FullMethodName     = "/warden.service.v1.WardenSystemService/Health"
-	WardenSystemService_GetInfo_FullMethodName    = "/warden.service.v1.WardenSystemService/GetInfo"
-	WardenSystemService_CheckVault_FullMethodName = "/warden.service.v1.WardenSystemService/CheckVault"
-	WardenSystemService_GetStats_FullMethodName   = "/warden.service.v1.WardenSystemService/GetStats"
+	WardenSystemService_Health_FullMethodName            = "/warden.service.v1.WardenSystemService/Health"
+	WardenSystemService_GetInfo_FullMethodName           = "/warden.service.v1.WardenSystemService/GetInfo"
+	WardenSystemService_CheckVault_FullMethodName        = "/warden.service.v1.WardenSystemService/CheckVault"
+	WardenSystemService_GetStats_FullMethodName          = "/warden.service.v1.WardenSystemService/GetStats"
+	WardenSystemService_CreateShareSecret_FullMethodName = "/warden.service.v1.WardenSystemService/CreateShareSecret"
 )
 
 // WardenSystemServiceClient is the client API for WardenSystemService service.
@@ -40,6 +41,8 @@ type WardenSystemServiceClient interface {
 	CheckVault(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CheckVaultResponse, error)
 	// Get statistics for dashboard
 	GetStats(ctx context.Context, in *GetStatsRequest, opts ...grpc.CallOption) (*GetStatsResponse, error)
+	// Create a share link for a secret (proxied to sharing module)
+	CreateShareSecret(ctx context.Context, in *CreateShareSecretRequest, opts ...grpc.CallOption) (*CreateShareSecretResponse, error)
 }
 
 type wardenSystemServiceClient struct {
@@ -90,6 +93,16 @@ func (c *wardenSystemServiceClient) GetStats(ctx context.Context, in *GetStatsRe
 	return out, nil
 }
 
+func (c *wardenSystemServiceClient) CreateShareSecret(ctx context.Context, in *CreateShareSecretRequest, opts ...grpc.CallOption) (*CreateShareSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateShareSecretResponse)
+	err := c.cc.Invoke(ctx, WardenSystemService_CreateShareSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WardenSystemServiceServer is the server API for WardenSystemService service.
 // All implementations must embed UnimplementedWardenSystemServiceServer
 // for forward compatibility.
@@ -104,6 +117,8 @@ type WardenSystemServiceServer interface {
 	CheckVault(context.Context, *emptypb.Empty) (*CheckVaultResponse, error)
 	// Get statistics for dashboard
 	GetStats(context.Context, *GetStatsRequest) (*GetStatsResponse, error)
+	// Create a share link for a secret (proxied to sharing module)
+	CreateShareSecret(context.Context, *CreateShareSecretRequest) (*CreateShareSecretResponse, error)
 	mustEmbedUnimplementedWardenSystemServiceServer()
 }
 
@@ -125,6 +140,9 @@ func (UnimplementedWardenSystemServiceServer) CheckVault(context.Context, *empty
 }
 func (UnimplementedWardenSystemServiceServer) GetStats(context.Context, *GetStatsRequest) (*GetStatsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetStats not implemented")
+}
+func (UnimplementedWardenSystemServiceServer) CreateShareSecret(context.Context, *CreateShareSecretRequest) (*CreateShareSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateShareSecret not implemented")
 }
 func (UnimplementedWardenSystemServiceServer) mustEmbedUnimplementedWardenSystemServiceServer() {}
 func (UnimplementedWardenSystemServiceServer) testEmbeddedByValue()                             {}
@@ -219,6 +237,24 @@ func _WardenSystemService_GetStats_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WardenSystemService_CreateShareSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateShareSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WardenSystemServiceServer).CreateShareSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WardenSystemService_CreateShareSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WardenSystemServiceServer).CreateShareSecret(ctx, req.(*CreateShareSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WardenSystemService_ServiceDesc is the grpc.ServiceDesc for WardenSystemService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -241,6 +277,10 @@ var WardenSystemService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStats",
 			Handler:    _WardenSystemService_GetStats_Handler,
+		},
+		{
+			MethodName: "CreateShareSecret",
+			Handler:    _WardenSystemService_CreateShareSecret_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

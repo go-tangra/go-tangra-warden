@@ -53,7 +53,6 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	secretService := service.NewSecretService(context, secretRepo, secretVersionRepo, folderRepo, permissionRepo, kvStore, checker, collector)
 	permissionService := service.NewPermissionService(context, permissionRepo, folderRepo, secretRepo, engine, checker)
 	statisticsRepo := data.NewStatisticsRepo(context, entClient)
-	systemService := service.NewSystemService(context, vaultClient, statisticsRepo)
 	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
 	backupService := service.NewBackupService(context, entClient, kvStore)
 	adminClient, cleanup3, err := client.NewAdminClient(context, certManager)
@@ -62,6 +61,14 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
+	sharingClient, cleanup4, err := client.NewSharingClient(context, certManager)
+	if err != nil {
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	systemService := service.NewSystemService(context, vaultClient, statisticsRepo, sharingClient)
 	userService := service.NewUserService(context, adminClient)
 	grpcServer := server.NewGRPCServer(context, certManager, collector, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
 	httpServer := server.NewHTTPServer(context)
@@ -74,6 +81,7 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	return app, func() {
 		secretService.Close()
 		collector.Stop(gocontext.Background())
+		cleanup4()
 		cleanup3()
 		cleanup2()
 		cleanup()

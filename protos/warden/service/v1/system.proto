@@ -34,6 +34,14 @@ service WardenSystemService {
       get: "/v1/stats"
     };
   }
+
+  // Create a share link for a secret (proxied to sharing module)
+  rpc CreateShareSecret(CreateShareSecretRequest) returns (CreateShareSecretResponse) {
+    option (google.api.http) = {
+      post: "/v1/shares"
+      body: "*"
+    };
+  }
 }
 
 // Health status
@@ -71,6 +79,45 @@ message CheckVaultResponse {
 
 message GetStatsRequest {
   optional uint32 tenant_id = 1 [json_name = "tenantId"];
+}
+
+// Policy type for share restrictions
+enum SharePolicyType {
+  SHARE_POLICY_TYPE_UNSPECIFIED = 0;
+  SHARE_POLICY_TYPE_BLACKLIST = 1;
+  SHARE_POLICY_TYPE_WHITELIST = 2;
+}
+
+// Policy method for share restrictions
+enum SharePolicyMethod {
+  SHARE_POLICY_METHOD_UNSPECIFIED = 0;
+  SHARE_POLICY_METHOD_IP = 1;
+  SHARE_POLICY_METHOD_MAC = 2;
+  SHARE_POLICY_METHOD_REGION = 3;
+  SHARE_POLICY_METHOD_TIME = 4;
+  SHARE_POLICY_METHOD_DEVICE = 5;
+  SHARE_POLICY_METHOD_NETWORK = 6;
+}
+
+// Policy input for creating a share
+message SharePolicyInput {
+  SharePolicyType type = 1 [json_name = "type"];
+  SharePolicyMethod method = 2 [json_name = "method"];
+  string value = 3 [json_name = "value"];
+  string reason = 4 [json_name = "reason"];
+}
+
+// Request to create a share link for a secret
+message CreateShareSecretRequest {
+  string resource_id = 1 [json_name = "resourceId"];
+  string recipient_email = 2 [json_name = "recipientEmail"];
+  string message = 3 [json_name = "message"];
+  repeated SharePolicyInput policies = 4 [json_name = "policies"];
+}
+
+message CreateShareSecretResponse {
+  string share_id = 1 [json_name = "shareId"];
+  string share_link = 2 [json_name = "shareLink"];
 }
 
 message GetStatsResponse {

@@ -84,6 +84,17 @@ func (s *redactedWardenSystemServiceServer) GetStats(ctx context.Context, in *Ge
 	return res, err
 }
 
+// CreateShareSecret is the redacted wrapper for the actual WardenSystemServiceServer.CreateShareSecret method
+// Unary RPC
+func (s *redactedWardenSystemServiceServer) CreateShareSecret(ctx context.Context, in *CreateShareSecretRequest) (*CreateShareSecretResponse, error) {
+	res, err := s.srv.CreateShareSecret(ctx, in)
+	if !s.bypass.CheckInternal(ctx) {
+		// Apply redaction to the response
+		redact.Apply(res)
+	}
+	return res, err
+}
+
 // Redact method implementation for HealthResponse
 func (x *HealthResponse) Redact() string {
 	if x == nil {
@@ -149,6 +160,50 @@ func (x *GetStatsRequest) Redact() string {
 	}
 
 	// Safe field: TenantId
+	return x.String()
+}
+
+// Redact method implementation for SharePolicyInput
+func (x *SharePolicyInput) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: Type
+
+	// Safe field: Method
+
+	// Safe field: Value
+
+	// Safe field: Reason
+	return x.String()
+}
+
+// Redact method implementation for CreateShareSecretRequest
+func (x *CreateShareSecretRequest) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: ResourceId
+
+	// Safe field: RecipientEmail
+
+	// Safe field: Message
+
+	// Safe field: Policies
+	return x.String()
+}
+
+// Redact method implementation for CreateShareSecretResponse
+func (x *CreateShareSecretResponse) Redact() string {
+	if x == nil {
+		return ""
+	}
+
+	// Safe field: ShareId
+
+	// Safe field: ShareLink
 	return x.String()
 }
 

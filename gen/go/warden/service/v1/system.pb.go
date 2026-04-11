@@ -76,6 +76,118 @@ func (HealthStatus) EnumDescriptor() ([]byte, []int) {
 	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{0}
 }
 
+// Policy type for share restrictions
+type SharePolicyType int32
+
+const (
+	SharePolicyType_SHARE_POLICY_TYPE_UNSPECIFIED SharePolicyType = 0
+	SharePolicyType_SHARE_POLICY_TYPE_BLACKLIST   SharePolicyType = 1
+	SharePolicyType_SHARE_POLICY_TYPE_WHITELIST   SharePolicyType = 2
+)
+
+// Enum value maps for SharePolicyType.
+var (
+	SharePolicyType_name = map[int32]string{
+		0: "SHARE_POLICY_TYPE_UNSPECIFIED",
+		1: "SHARE_POLICY_TYPE_BLACKLIST",
+		2: "SHARE_POLICY_TYPE_WHITELIST",
+	}
+	SharePolicyType_value = map[string]int32{
+		"SHARE_POLICY_TYPE_UNSPECIFIED": 0,
+		"SHARE_POLICY_TYPE_BLACKLIST":   1,
+		"SHARE_POLICY_TYPE_WHITELIST":   2,
+	}
+)
+
+func (x SharePolicyType) Enum() *SharePolicyType {
+	p := new(SharePolicyType)
+	*p = x
+	return p
+}
+
+func (x SharePolicyType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SharePolicyType) Descriptor() protoreflect.EnumDescriptor {
+	return file_warden_service_v1_system_proto_enumTypes[1].Descriptor()
+}
+
+func (SharePolicyType) Type() protoreflect.EnumType {
+	return &file_warden_service_v1_system_proto_enumTypes[1]
+}
+
+func (x SharePolicyType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SharePolicyType.Descriptor instead.
+func (SharePolicyType) EnumDescriptor() ([]byte, []int) {
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{1}
+}
+
+// Policy method for share restrictions
+type SharePolicyMethod int32
+
+const (
+	SharePolicyMethod_SHARE_POLICY_METHOD_UNSPECIFIED SharePolicyMethod = 0
+	SharePolicyMethod_SHARE_POLICY_METHOD_IP          SharePolicyMethod = 1
+	SharePolicyMethod_SHARE_POLICY_METHOD_MAC         SharePolicyMethod = 2
+	SharePolicyMethod_SHARE_POLICY_METHOD_REGION      SharePolicyMethod = 3
+	SharePolicyMethod_SHARE_POLICY_METHOD_TIME        SharePolicyMethod = 4
+	SharePolicyMethod_SHARE_POLICY_METHOD_DEVICE      SharePolicyMethod = 5
+	SharePolicyMethod_SHARE_POLICY_METHOD_NETWORK     SharePolicyMethod = 6
+)
+
+// Enum value maps for SharePolicyMethod.
+var (
+	SharePolicyMethod_name = map[int32]string{
+		0: "SHARE_POLICY_METHOD_UNSPECIFIED",
+		1: "SHARE_POLICY_METHOD_IP",
+		2: "SHARE_POLICY_METHOD_MAC",
+		3: "SHARE_POLICY_METHOD_REGION",
+		4: "SHARE_POLICY_METHOD_TIME",
+		5: "SHARE_POLICY_METHOD_DEVICE",
+		6: "SHARE_POLICY_METHOD_NETWORK",
+	}
+	SharePolicyMethod_value = map[string]int32{
+		"SHARE_POLICY_METHOD_UNSPECIFIED": 0,
+		"SHARE_POLICY_METHOD_IP":          1,
+		"SHARE_POLICY_METHOD_MAC":         2,
+		"SHARE_POLICY_METHOD_REGION":      3,
+		"SHARE_POLICY_METHOD_TIME":        4,
+		"SHARE_POLICY_METHOD_DEVICE":      5,
+		"SHARE_POLICY_METHOD_NETWORK":     6,
+	}
+)
+
+func (x SharePolicyMethod) Enum() *SharePolicyMethod {
+	p := new(SharePolicyMethod)
+	*p = x
+	return p
+}
+
+func (x SharePolicyMethod) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SharePolicyMethod) Descriptor() protoreflect.EnumDescriptor {
+	return file_warden_service_v1_system_proto_enumTypes[2].Descriptor()
+}
+
+func (SharePolicyMethod) Type() protoreflect.EnumType {
+	return &file_warden_service_v1_system_proto_enumTypes[2]
+}
+
+func (x SharePolicyMethod) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SharePolicyMethod.Descriptor instead.
+func (SharePolicyMethod) EnumDescriptor() ([]byte, []int) {
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{2}
+}
+
 type HealthResponse struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
 	Status        HealthStatus                `protobuf:"varint,1,opt,name=status,proto3,enum=warden.service.v1.HealthStatus" json:"status,omitempty"`
@@ -368,6 +480,196 @@ func (x *GetStatsRequest) GetTenantId() uint32 {
 	return 0
 }
 
+// Policy input for creating a share
+type SharePolicyInput struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          SharePolicyType        `protobuf:"varint,1,opt,name=type,proto3,enum=warden.service.v1.SharePolicyType" json:"type,omitempty"`
+	Method        SharePolicyMethod      `protobuf:"varint,2,opt,name=method,proto3,enum=warden.service.v1.SharePolicyMethod" json:"method,omitempty"`
+	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SharePolicyInput) Reset() {
+	*x = SharePolicyInput{}
+	mi := &file_warden_service_v1_system_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SharePolicyInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SharePolicyInput) ProtoMessage() {}
+
+func (x *SharePolicyInput) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_system_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SharePolicyInput.ProtoReflect.Descriptor instead.
+func (*SharePolicyInput) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SharePolicyInput) GetType() SharePolicyType {
+	if x != nil {
+		return x.Type
+	}
+	return SharePolicyType_SHARE_POLICY_TYPE_UNSPECIFIED
+}
+
+func (x *SharePolicyInput) GetMethod() SharePolicyMethod {
+	if x != nil {
+		return x.Method
+	}
+	return SharePolicyMethod_SHARE_POLICY_METHOD_UNSPECIFIED
+}
+
+func (x *SharePolicyInput) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *SharePolicyInput) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// Request to create a share link for a secret
+type CreateShareSecretRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ResourceId     string                 `protobuf:"bytes,1,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	RecipientEmail string                 `protobuf:"bytes,2,opt,name=recipient_email,json=recipientEmail,proto3" json:"recipient_email,omitempty"`
+	Message        string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Policies       []*SharePolicyInput    `protobuf:"bytes,4,rep,name=policies,proto3" json:"policies,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateShareSecretRequest) Reset() {
+	*x = CreateShareSecretRequest{}
+	mi := &file_warden_service_v1_system_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateShareSecretRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateShareSecretRequest) ProtoMessage() {}
+
+func (x *CreateShareSecretRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_system_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateShareSecretRequest.ProtoReflect.Descriptor instead.
+func (*CreateShareSecretRequest) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateShareSecretRequest) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *CreateShareSecretRequest) GetRecipientEmail() string {
+	if x != nil {
+		return x.RecipientEmail
+	}
+	return ""
+}
+
+func (x *CreateShareSecretRequest) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *CreateShareSecretRequest) GetPolicies() []*SharePolicyInput {
+	if x != nil {
+		return x.Policies
+	}
+	return nil
+}
+
+type CreateShareSecretResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShareId       string                 `protobuf:"bytes,1,opt,name=share_id,json=shareId,proto3" json:"share_id,omitempty"`
+	ShareLink     string                 `protobuf:"bytes,2,opt,name=share_link,json=shareLink,proto3" json:"share_link,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateShareSecretResponse) Reset() {
+	*x = CreateShareSecretResponse{}
+	mi := &file_warden_service_v1_system_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateShareSecretResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateShareSecretResponse) ProtoMessage() {}
+
+func (x *CreateShareSecretResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_warden_service_v1_system_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateShareSecretResponse.ProtoReflect.Descriptor instead.
+func (*CreateShareSecretResponse) Descriptor() ([]byte, []int) {
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CreateShareSecretResponse) GetShareId() string {
+	if x != nil {
+		return x.ShareId
+	}
+	return ""
+}
+
+func (x *CreateShareSecretResponse) GetShareLink() string {
+	if x != nil {
+		return x.ShareLink
+	}
+	return ""
+}
+
 type GetStatsResponse struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	TotalSecrets         int64                  `protobuf:"varint,1,opt,name=total_secrets,json=totalSecrets,proto3" json:"total_secrets,omitempty"`
@@ -382,7 +684,7 @@ type GetStatsResponse struct {
 
 func (x *GetStatsResponse) Reset() {
 	*x = GetStatsResponse{}
-	mi := &file_warden_service_v1_system_proto_msgTypes[5]
+	mi := &file_warden_service_v1_system_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +696,7 @@ func (x *GetStatsResponse) String() string {
 func (*GetStatsResponse) ProtoMessage() {}
 
 func (x *GetStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_warden_service_v1_system_proto_msgTypes[5]
+	mi := &file_warden_service_v1_system_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +709,7 @@ func (x *GetStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetStatsResponse) Descriptor() ([]byte, []int) {
-	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{5}
+	return file_warden_service_v1_system_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetStatsResponse) GetTotalSecrets() int64 {
@@ -485,7 +787,22 @@ const file_warden_service_v1_system_proto_rawDesc = "" +
 	"\x0fGetStatsRequest\x12 \n" +
 	"\ttenant_id\x18\x01 \x01(\rH\x00R\btenantId\x88\x01\x01B\f\n" +
 	"\n" +
-	"_tenant_id\"\x8c\x02\n" +
+	"_tenant_id\"\xb6\x01\n" +
+	"\x10SharePolicyInput\x126\n" +
+	"\x04type\x18\x01 \x01(\x0e2\".warden.service.v1.SharePolicyTypeR\x04type\x12<\n" +
+	"\x06method\x18\x02 \x01(\x0e2$.warden.service.v1.SharePolicyMethodR\x06method\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\xbf\x01\n" +
+	"\x18CreateShareSecretRequest\x12\x1f\n" +
+	"\vresource_id\x18\x01 \x01(\tR\n" +
+	"resourceId\x12'\n" +
+	"\x0frecipient_email\x18\x02 \x01(\tR\x0erecipientEmail\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12?\n" +
+	"\bpolicies\x18\x04 \x03(\v2#.warden.service.v1.SharePolicyInputR\bpolicies\"U\n" +
+	"\x19CreateShareSecretResponse\x12\x19\n" +
+	"\bshare_id\x18\x01 \x01(\tR\ashareId\x12\x1d\n" +
+	"\n" +
+	"share_link\x18\x02 \x01(\tR\tshareLink\"\x8c\x02\n" +
 	"\x10GetStatsResponse\x12#\n" +
 	"\rtotal_secrets\x18\x01 \x01(\x03R\ftotalSecrets\x12%\n" +
 	"\x0eactive_secrets\x18\x02 \x01(\x03R\ractiveSecrets\x12)\n" +
@@ -497,7 +814,19 @@ const file_warden_service_v1_system_proto_rawDesc = "" +
 	"\x19HEALTH_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15HEALTH_STATUS_HEALTHY\x10\x01\x12\x1a\n" +
 	"\x16HEALTH_STATUS_DEGRADED\x10\x02\x12\x1b\n" +
-	"\x17HEALTH_STATUS_UNHEALTHY\x10\x032\x95\x03\n" +
+	"\x17HEALTH_STATUS_UNHEALTHY\x10\x03*v\n" +
+	"\x0fSharePolicyType\x12!\n" +
+	"\x1dSHARE_POLICY_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bSHARE_POLICY_TYPE_BLACKLIST\x10\x01\x12\x1f\n" +
+	"\x1bSHARE_POLICY_TYPE_WHITELIST\x10\x02*\xf0\x01\n" +
+	"\x11SharePolicyMethod\x12#\n" +
+	"\x1fSHARE_POLICY_METHOD_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16SHARE_POLICY_METHOD_IP\x10\x01\x12\x1b\n" +
+	"\x17SHARE_POLICY_METHOD_MAC\x10\x02\x12\x1e\n" +
+	"\x1aSHARE_POLICY_METHOD_REGION\x10\x03\x12\x1c\n" +
+	"\x18SHARE_POLICY_METHOD_TIME\x10\x04\x12\x1e\n" +
+	"\x1aSHARE_POLICY_METHOD_DEVICE\x10\x05\x12\x1f\n" +
+	"\x1bSHARE_POLICY_METHOD_NETWORK\x10\x062\x9d\x04\n" +
 	"\x13WardenSystemService\x12W\n" +
 	"\x06Health\x12\x16.google.protobuf.Empty\x1a!.warden.service.v1.HealthResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
 	"/v1/health\x12W\n" +
@@ -505,7 +834,9 @@ const file_warden_service_v1_system_proto_rawDesc = "" +
 	"\x12\b/v1/info\x12d\n" +
 	"\n" +
 	"CheckVault\x12\x16.google.protobuf.Empty\x1a%.warden.service.v1.CheckVaultResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/vault/check\x12f\n" +
-	"\bGetStats\x12\".warden.service.v1.GetStatsRequest\x1a#.warden.service.v1.GetStatsResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/statsB\xd3\x01\n" +
+	"\bGetStats\x12\".warden.service.v1.GetStatsRequest\x1a#.warden.service.v1.GetStatsResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/stats\x12\x85\x01\n" +
+	"\x11CreateShareSecret\x12+.warden.service.v1.CreateShareSecretRequest\x1a,.warden.service.v1.CreateShareSecretResponse\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
+	"/v1/sharesB\xd3\x01\n" +
 	"\x15com.warden.service.v1B\vSystemProtoP\x01ZGgithub.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1;wardenpb\xa2\x02\x03WSX\xaa\x02\x11Warden.Service.V1\xca\x02\x11Warden\\Service\\V1\xe2\x02\x1dWarden\\Service\\V1\\GPBMetadata\xea\x02\x13Warden::Service::V1b\x06proto3"
 
 var (
@@ -520,37 +851,47 @@ func file_warden_service_v1_system_proto_rawDescGZIP() []byte {
 	return file_warden_service_v1_system_proto_rawDescData
 }
 
-var file_warden_service_v1_system_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_warden_service_v1_system_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_warden_service_v1_system_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_warden_service_v1_system_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_warden_service_v1_system_proto_goTypes = []any{
-	(HealthStatus)(0),          // 0: warden.service.v1.HealthStatus
-	(*HealthResponse)(nil),     // 1: warden.service.v1.HealthResponse
-	(*ComponentHealth)(nil),    // 2: warden.service.v1.ComponentHealth
-	(*GetInfoResponse)(nil),    // 3: warden.service.v1.GetInfoResponse
-	(*CheckVaultResponse)(nil), // 4: warden.service.v1.CheckVaultResponse
-	(*GetStatsRequest)(nil),    // 5: warden.service.v1.GetStatsRequest
-	(*GetStatsResponse)(nil),   // 6: warden.service.v1.GetStatsResponse
-	nil,                        // 7: warden.service.v1.HealthResponse.ComponentsEntry
-	(*emptypb.Empty)(nil),      // 8: google.protobuf.Empty
+	(HealthStatus)(0),                 // 0: warden.service.v1.HealthStatus
+	(SharePolicyType)(0),              // 1: warden.service.v1.SharePolicyType
+	(SharePolicyMethod)(0),            // 2: warden.service.v1.SharePolicyMethod
+	(*HealthResponse)(nil),            // 3: warden.service.v1.HealthResponse
+	(*ComponentHealth)(nil),           // 4: warden.service.v1.ComponentHealth
+	(*GetInfoResponse)(nil),           // 5: warden.service.v1.GetInfoResponse
+	(*CheckVaultResponse)(nil),        // 6: warden.service.v1.CheckVaultResponse
+	(*GetStatsRequest)(nil),           // 7: warden.service.v1.GetStatsRequest
+	(*SharePolicyInput)(nil),          // 8: warden.service.v1.SharePolicyInput
+	(*CreateShareSecretRequest)(nil),  // 9: warden.service.v1.CreateShareSecretRequest
+	(*CreateShareSecretResponse)(nil), // 10: warden.service.v1.CreateShareSecretResponse
+	(*GetStatsResponse)(nil),          // 11: warden.service.v1.GetStatsResponse
+	nil,                               // 12: warden.service.v1.HealthResponse.ComponentsEntry
+	(*emptypb.Empty)(nil),             // 13: google.protobuf.Empty
 }
 var file_warden_service_v1_system_proto_depIdxs = []int32{
-	0, // 0: warden.service.v1.HealthResponse.status:type_name -> warden.service.v1.HealthStatus
-	7, // 1: warden.service.v1.HealthResponse.components:type_name -> warden.service.v1.HealthResponse.ComponentsEntry
-	0, // 2: warden.service.v1.ComponentHealth.status:type_name -> warden.service.v1.HealthStatus
-	2, // 3: warden.service.v1.HealthResponse.ComponentsEntry.value:type_name -> warden.service.v1.ComponentHealth
-	8, // 4: warden.service.v1.WardenSystemService.Health:input_type -> google.protobuf.Empty
-	8, // 5: warden.service.v1.WardenSystemService.GetInfo:input_type -> google.protobuf.Empty
-	8, // 6: warden.service.v1.WardenSystemService.CheckVault:input_type -> google.protobuf.Empty
-	5, // 7: warden.service.v1.WardenSystemService.GetStats:input_type -> warden.service.v1.GetStatsRequest
-	1, // 8: warden.service.v1.WardenSystemService.Health:output_type -> warden.service.v1.HealthResponse
-	3, // 9: warden.service.v1.WardenSystemService.GetInfo:output_type -> warden.service.v1.GetInfoResponse
-	4, // 10: warden.service.v1.WardenSystemService.CheckVault:output_type -> warden.service.v1.CheckVaultResponse
-	6, // 11: warden.service.v1.WardenSystemService.GetStats:output_type -> warden.service.v1.GetStatsResponse
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0,  // 0: warden.service.v1.HealthResponse.status:type_name -> warden.service.v1.HealthStatus
+	12, // 1: warden.service.v1.HealthResponse.components:type_name -> warden.service.v1.HealthResponse.ComponentsEntry
+	0,  // 2: warden.service.v1.ComponentHealth.status:type_name -> warden.service.v1.HealthStatus
+	1,  // 3: warden.service.v1.SharePolicyInput.type:type_name -> warden.service.v1.SharePolicyType
+	2,  // 4: warden.service.v1.SharePolicyInput.method:type_name -> warden.service.v1.SharePolicyMethod
+	8,  // 5: warden.service.v1.CreateShareSecretRequest.policies:type_name -> warden.service.v1.SharePolicyInput
+	4,  // 6: warden.service.v1.HealthResponse.ComponentsEntry.value:type_name -> warden.service.v1.ComponentHealth
+	13, // 7: warden.service.v1.WardenSystemService.Health:input_type -> google.protobuf.Empty
+	13, // 8: warden.service.v1.WardenSystemService.GetInfo:input_type -> google.protobuf.Empty
+	13, // 9: warden.service.v1.WardenSystemService.CheckVault:input_type -> google.protobuf.Empty
+	7,  // 10: warden.service.v1.WardenSystemService.GetStats:input_type -> warden.service.v1.GetStatsRequest
+	9,  // 11: warden.service.v1.WardenSystemService.CreateShareSecret:input_type -> warden.service.v1.CreateShareSecretRequest
+	3,  // 12: warden.service.v1.WardenSystemService.Health:output_type -> warden.service.v1.HealthResponse
+	5,  // 13: warden.service.v1.WardenSystemService.GetInfo:output_type -> warden.service.v1.GetInfoResponse
+	6,  // 14: warden.service.v1.WardenSystemService.CheckVault:output_type -> warden.service.v1.CheckVaultResponse
+	11, // 15: warden.service.v1.WardenSystemService.GetStats:output_type -> warden.service.v1.GetStatsResponse
+	10, // 16: warden.service.v1.WardenSystemService.CreateShareSecret:output_type -> warden.service.v1.CreateShareSecretResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_warden_service_v1_system_proto_init() }
@@ -564,8 +905,8 @@ func file_warden_service_v1_system_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_warden_service_v1_system_proto_rawDesc), len(file_warden_service_v1_system_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   7,
+			NumEnums:      3,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

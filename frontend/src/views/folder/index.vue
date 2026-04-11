@@ -41,12 +41,12 @@ import {
   type Secret,
   type FolderTreeNode,
   type ExportToBitwardenResponse,
+  SystemService,
 } from '../../api/services';
 import { $t } from 'shell/locales';
 import type { CreateSharePolicyInput, SharePolicyType, SharePolicyMethod } from '../../types';
 import { useWardenFolderStore } from '../../stores/warden-folder.state';
 import { useWardenSecretStore } from '../../stores/warden-secret.state';
-import { useAccessStore } from 'shell/vben/stores';
 
 import FolderDrawer from './folder-drawer.vue';
 import SecretDrawer from '../secret/secret-drawer.vue';
@@ -56,24 +56,6 @@ import BitwardenImportModal from '../secret/bitwarden-import-modal.vue';
 
 const folderStore = useWardenFolderStore();
 const secretStore = useWardenSecretStore();
-
-// Direct API call to sharing service (sharing store is in a separate MF module)
-async function createShare(data: Record<string, unknown>) {
-  const token = (useAccessStore() as any).accessToken;
-  const res = await fetch('/admin/v1/modules/sharing/v1/shares', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
 
 // Folder tree state
 const folderTree = ref<FolderTreeNode[]>([]);
@@ -391,8 +373,7 @@ async function handleShareSubmit() {
   if (!shareSecretRow.value?.id || !shareEmail.value) return;
   shareLoading.value = true;
   try {
-    await createShare({
-      resourceType: 'RESOURCE_TYPE_SECRET',
+    await SystemService.createShare({
       resourceId: shareSecretRow.value.id,
       recipientEmail: shareEmail.value,
       message: shareMessage.value || undefined,

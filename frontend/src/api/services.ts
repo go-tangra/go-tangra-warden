@@ -70,6 +70,12 @@ export type HealthResponse = components['schemas']['HealthResponse'];
 export type CheckVaultResponse = components['schemas']['CheckVaultResponse'];
 export type ExportToBitwardenResponse = components['schemas']['ExportToBitwardenResponse'];
 
+// Share response type (proxied to sharing module via warden backend)
+export interface CreateShareSecretResponse {
+  shareId: string;
+  shareLink: string;
+}
+
 // TOTP types (not yet in OpenAPI generated types)
 export interface GetSecretTotpResponse {
   totpUrl: string;
@@ -379,5 +385,9 @@ export const SystemService = {
 
   checkVault: async (options?: RequestOptions): Promise<CheckVaultResponse> => {
     return wardenApi.get<CheckVaultResponse>('/vault/check', options);
+  },
+
+  createShare: async (data: Record<string, unknown>, options?: RequestOptions): Promise<CreateShareSecretResponse> => {
+    return wardenApi.post<CreateShareSecretResponse>('/shares', data, options);
   },
 };
