@@ -89,13 +89,16 @@ func NewGRPCServer(
 	ms = append(ms, logging.Server(ctx.GetLogger()))
 
 	// Add mTLS middleware to extract client info from certificates
-	ms = append(ms, mtls.MTLSMiddleware(
-		ctx.GetLogger(),
-		mtls.WithPublicEndpoints(
-			"/grpc.health.v1.Health/Check",
-			"/grpc.health.v1.Health/Watch",
-		),
-	))
+	// Add mTLS middleware only when TLS is enabled
+	if certManager != nil && certManager.IsTLSEnabled() {
+		ms = append(ms, mtls.MTLSMiddleware(
+			ctx.GetLogger(),
+			mtls.WithPublicEndpoints(
+				"/grpc.health.v1.Health/Check",
+				"/grpc.health.v1.Health/Watch",
+			),
+		))
+	}
 
 	// Add audit logging middleware
 	ms = append(ms, audit.Server(
