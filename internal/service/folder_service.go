@@ -78,6 +78,26 @@ func (s *FolderService) CreateFolder(ctx context.Context, req *wardenV1.CreateFo
 		}
 	}
 
+	// Apply additional permissions supplied by the creator. Same rules as
+	// CreateSecret: skip malformed rows, and skip rows that duplicate the
+	// creator-as-OWNER grant we just persisted.
+	for _, perm := range req.InitialPermissions {
+		if perm.SubjectId == "" || perm.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_UNSPECIFIED {
+			continue
+		}
+		if perm.SubjectType == wardenV1.SubjectType_SUBJECT_TYPE_USER && perm.SubjectId == userID {
+			continue
+		}
+		relation := string(mapProtoRelationToAuthz(perm.Relation))
+		if relation == "" {
+			continue
+		}
+		subjectType := string(mapProtoSubjectTypeToAuthz(perm.SubjectType))
+		if _, pErr := s.permRepo.Create(ctx, tenantID, string(authz.ResourceTypeFolder), folder.ID, relation, subjectType, perm.SubjectId, createdBy, nil); pErr != nil {
+			s.log.Warnf("failed to grant initial permission to %s/%s on folder %s: %v", perm.SubjectType, perm.SubjectId, folder.ID, pErr)
+		}
+	}
+
 	s.metrics.FolderCreated()
 
 	s.log.Infof("Folder created: id=%s parent=%v user=%s", folder.ID, req.ParentId, userID)
@@ -141,12 +161,13 @@ func (s *FolderService) ListFolders(ctx context.Context, req *wardenV1.ListFolde
 		pageSize = *req.PageSize
 	}
 
-	folders, _, err := s.folderRepo.List(ctx, tenantID, req.ParentId, req.NameFilter, page, pageSize)
+	folders, total, err := s.folderRepo.List(ctx, tenantID, req.ParentId, req.NameFilter, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter folders by permission
+	// Filter folders by permission. Total comes from the repo so the pager
+	// stays accurate; permission-inaccessible rows just drop off the page.
 	accessibleFolders := make([]*wardenV1.Folder, 0, len(folders))
 	for _, folder := range folders {
 		if err := s.checker.CanReadFolder(ctx, tenantID, userID, folder.ID); err == nil {
@@ -156,7 +177,7 @@ func (s *FolderService) ListFolders(ctx context.Context, req *wardenV1.ListFolde
 
 	return &wardenV1.ListFoldersResponse{
 		Folders: accessibleFolders,
-		Total:   uint32(len(accessibleFolders)),
+		Total:   uint32(total),
 	}, nil
 }
 

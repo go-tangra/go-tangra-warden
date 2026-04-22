@@ -166,9 +166,13 @@ type CreateFolderRequest struct {
 	// Folder name
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// Optional description
-	Description   string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// Optional extra permissions to grant alongside the implicit OWNER that
+	// the server always assigns to the creator. Duplicate grants for the
+	// creator as OWNER are ignored.
+	InitialPermissions []*InitialPermissionGrant `protobuf:"bytes,4,rep,name=initial_permissions,json=initialPermissions,proto3" json:"initial_permissions,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CreateFolderRequest) Reset() {
@@ -220,6 +224,13 @@ func (x *CreateFolderRequest) GetDescription() string {
 		return x.Description
 	}
 	return ""
+}
+
+func (x *CreateFolderRequest) GetInitialPermissions() []*InitialPermissionGrant {
+	if x != nil {
+		return x.InitialPermissions
+	}
+	return nil
 }
 
 type CreateFolderResponse struct {
@@ -912,7 +923,7 @@ var File_warden_service_v1_folder_proto protoreflect.FileDescriptor
 
 const file_warden_service_v1_folder_proto_rawDesc = "" +
 	"\n" +
-	"\x1ewarden/service/v1/folder.proto\x12\x11warden.service.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbe\x03\n" +
+	"\x1ewarden/service/v1/folder.proto\x12\x11warden.service.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1ewarden/service/v1/secret.proto\"\xbe\x03\n" +
 	"\x06Folder\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\rR\btenantId\x12 \n" +
@@ -932,11 +943,12 @@ const file_warden_service_v1_folder_proto_rawDesc = "" +
 	"created_by\x18\f \x01(\rH\x01R\tcreatedBy\x88\x01\x01B\f\n" +
 	"\n" +
 	"_parent_idB\r\n" +
-	"\v_created_by\"\xd3\x01\n" +
+	"\v_created_by\"\xaf\x02\n" +
 	"\x13CreateFolderRequest\x12=\n" +
 	"\tparent_id\x18\x01 \x01(\tB\x1b\xbaH\x18r\x16\x10\x00\x18$2\x10^[a-fA-F0-9\\-]*$H\x00R\bparentId\x88\x01\x01\x12C\n" +
 	"\x04name\x18\x02 \x01(\tB/\xe0A\x02\xbaH)r'\x10\x01\x18\xff\x012 ^[a-zA-Z0-9][a-zA-Z0-9\\-_\\.\\s]*$R\x04name\x12*\n" +
-	"\vdescription\x18\x03 \x01(\tB\b\xbaH\x05r\x03\x18\x80\bR\vdescriptionB\f\n" +
+	"\vdescription\x18\x03 \x01(\tB\b\xbaH\x05r\x03\x18\x80\bR\vdescription\x12Z\n" +
+	"\x13initial_permissions\x18\x04 \x03(\v2).warden.service.v1.InitialPermissionGrantR\x12initialPermissionsB\f\n" +
 	"\n" +
 	"_parent_id\"I\n" +
 	"\x14CreateFolderResponse\x121\n" +
@@ -1016,54 +1028,56 @@ func file_warden_service_v1_folder_proto_rawDescGZIP() []byte {
 
 var file_warden_service_v1_folder_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_warden_service_v1_folder_proto_goTypes = []any{
-	(*Folder)(nil),                // 0: warden.service.v1.Folder
-	(*CreateFolderRequest)(nil),   // 1: warden.service.v1.CreateFolderRequest
-	(*CreateFolderResponse)(nil),  // 2: warden.service.v1.CreateFolderResponse
-	(*GetFolderRequest)(nil),      // 3: warden.service.v1.GetFolderRequest
-	(*GetFolderResponse)(nil),     // 4: warden.service.v1.GetFolderResponse
-	(*ListFoldersRequest)(nil),    // 5: warden.service.v1.ListFoldersRequest
-	(*ListFoldersResponse)(nil),   // 6: warden.service.v1.ListFoldersResponse
-	(*UpdateFolderRequest)(nil),   // 7: warden.service.v1.UpdateFolderRequest
-	(*UpdateFolderResponse)(nil),  // 8: warden.service.v1.UpdateFolderResponse
-	(*DeleteFolderRequest)(nil),   // 9: warden.service.v1.DeleteFolderRequest
-	(*MoveFolderRequest)(nil),     // 10: warden.service.v1.MoveFolderRequest
-	(*MoveFolderResponse)(nil),    // 11: warden.service.v1.MoveFolderResponse
-	(*GetFolderTreeRequest)(nil),  // 12: warden.service.v1.GetFolderTreeRequest
-	(*FolderTreeNode)(nil),        // 13: warden.service.v1.FolderTreeNode
-	(*GetFolderTreeResponse)(nil), // 14: warden.service.v1.GetFolderTreeResponse
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),         // 16: google.protobuf.Empty
+	(*Folder)(nil),                 // 0: warden.service.v1.Folder
+	(*CreateFolderRequest)(nil),    // 1: warden.service.v1.CreateFolderRequest
+	(*CreateFolderResponse)(nil),   // 2: warden.service.v1.CreateFolderResponse
+	(*GetFolderRequest)(nil),       // 3: warden.service.v1.GetFolderRequest
+	(*GetFolderResponse)(nil),      // 4: warden.service.v1.GetFolderResponse
+	(*ListFoldersRequest)(nil),     // 5: warden.service.v1.ListFoldersRequest
+	(*ListFoldersResponse)(nil),    // 6: warden.service.v1.ListFoldersResponse
+	(*UpdateFolderRequest)(nil),    // 7: warden.service.v1.UpdateFolderRequest
+	(*UpdateFolderResponse)(nil),   // 8: warden.service.v1.UpdateFolderResponse
+	(*DeleteFolderRequest)(nil),    // 9: warden.service.v1.DeleteFolderRequest
+	(*MoveFolderRequest)(nil),      // 10: warden.service.v1.MoveFolderRequest
+	(*MoveFolderResponse)(nil),     // 11: warden.service.v1.MoveFolderResponse
+	(*GetFolderTreeRequest)(nil),   // 12: warden.service.v1.GetFolderTreeRequest
+	(*FolderTreeNode)(nil),         // 13: warden.service.v1.FolderTreeNode
+	(*GetFolderTreeResponse)(nil),  // 14: warden.service.v1.GetFolderTreeResponse
+	(*timestamppb.Timestamp)(nil),  // 15: google.protobuf.Timestamp
+	(*InitialPermissionGrant)(nil), // 16: warden.service.v1.InitialPermissionGrant
+	(*emptypb.Empty)(nil),          // 17: google.protobuf.Empty
 }
 var file_warden_service_v1_folder_proto_depIdxs = []int32{
 	15, // 0: warden.service.v1.Folder.create_time:type_name -> google.protobuf.Timestamp
 	15, // 1: warden.service.v1.Folder.update_time:type_name -> google.protobuf.Timestamp
-	0,  // 2: warden.service.v1.CreateFolderResponse.folder:type_name -> warden.service.v1.Folder
-	0,  // 3: warden.service.v1.GetFolderResponse.folder:type_name -> warden.service.v1.Folder
-	0,  // 4: warden.service.v1.ListFoldersResponse.folders:type_name -> warden.service.v1.Folder
-	0,  // 5: warden.service.v1.UpdateFolderResponse.folder:type_name -> warden.service.v1.Folder
-	0,  // 6: warden.service.v1.MoveFolderResponse.folder:type_name -> warden.service.v1.Folder
-	0,  // 7: warden.service.v1.FolderTreeNode.folder:type_name -> warden.service.v1.Folder
-	13, // 8: warden.service.v1.FolderTreeNode.children:type_name -> warden.service.v1.FolderTreeNode
-	13, // 9: warden.service.v1.GetFolderTreeResponse.roots:type_name -> warden.service.v1.FolderTreeNode
-	1,  // 10: warden.service.v1.WardenFolderService.CreateFolder:input_type -> warden.service.v1.CreateFolderRequest
-	3,  // 11: warden.service.v1.WardenFolderService.GetFolder:input_type -> warden.service.v1.GetFolderRequest
-	5,  // 12: warden.service.v1.WardenFolderService.ListFolders:input_type -> warden.service.v1.ListFoldersRequest
-	7,  // 13: warden.service.v1.WardenFolderService.UpdateFolder:input_type -> warden.service.v1.UpdateFolderRequest
-	9,  // 14: warden.service.v1.WardenFolderService.DeleteFolder:input_type -> warden.service.v1.DeleteFolderRequest
-	10, // 15: warden.service.v1.WardenFolderService.MoveFolder:input_type -> warden.service.v1.MoveFolderRequest
-	12, // 16: warden.service.v1.WardenFolderService.GetFolderTree:input_type -> warden.service.v1.GetFolderTreeRequest
-	2,  // 17: warden.service.v1.WardenFolderService.CreateFolder:output_type -> warden.service.v1.CreateFolderResponse
-	4,  // 18: warden.service.v1.WardenFolderService.GetFolder:output_type -> warden.service.v1.GetFolderResponse
-	6,  // 19: warden.service.v1.WardenFolderService.ListFolders:output_type -> warden.service.v1.ListFoldersResponse
-	8,  // 20: warden.service.v1.WardenFolderService.UpdateFolder:output_type -> warden.service.v1.UpdateFolderResponse
-	16, // 21: warden.service.v1.WardenFolderService.DeleteFolder:output_type -> google.protobuf.Empty
-	11, // 22: warden.service.v1.WardenFolderService.MoveFolder:output_type -> warden.service.v1.MoveFolderResponse
-	14, // 23: warden.service.v1.WardenFolderService.GetFolderTree:output_type -> warden.service.v1.GetFolderTreeResponse
-	17, // [17:24] is the sub-list for method output_type
-	10, // [10:17] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	16, // 2: warden.service.v1.CreateFolderRequest.initial_permissions:type_name -> warden.service.v1.InitialPermissionGrant
+	0,  // 3: warden.service.v1.CreateFolderResponse.folder:type_name -> warden.service.v1.Folder
+	0,  // 4: warden.service.v1.GetFolderResponse.folder:type_name -> warden.service.v1.Folder
+	0,  // 5: warden.service.v1.ListFoldersResponse.folders:type_name -> warden.service.v1.Folder
+	0,  // 6: warden.service.v1.UpdateFolderResponse.folder:type_name -> warden.service.v1.Folder
+	0,  // 7: warden.service.v1.MoveFolderResponse.folder:type_name -> warden.service.v1.Folder
+	0,  // 8: warden.service.v1.FolderTreeNode.folder:type_name -> warden.service.v1.Folder
+	13, // 9: warden.service.v1.FolderTreeNode.children:type_name -> warden.service.v1.FolderTreeNode
+	13, // 10: warden.service.v1.GetFolderTreeResponse.roots:type_name -> warden.service.v1.FolderTreeNode
+	1,  // 11: warden.service.v1.WardenFolderService.CreateFolder:input_type -> warden.service.v1.CreateFolderRequest
+	3,  // 12: warden.service.v1.WardenFolderService.GetFolder:input_type -> warden.service.v1.GetFolderRequest
+	5,  // 13: warden.service.v1.WardenFolderService.ListFolders:input_type -> warden.service.v1.ListFoldersRequest
+	7,  // 14: warden.service.v1.WardenFolderService.UpdateFolder:input_type -> warden.service.v1.UpdateFolderRequest
+	9,  // 15: warden.service.v1.WardenFolderService.DeleteFolder:input_type -> warden.service.v1.DeleteFolderRequest
+	10, // 16: warden.service.v1.WardenFolderService.MoveFolder:input_type -> warden.service.v1.MoveFolderRequest
+	12, // 17: warden.service.v1.WardenFolderService.GetFolderTree:input_type -> warden.service.v1.GetFolderTreeRequest
+	2,  // 18: warden.service.v1.WardenFolderService.CreateFolder:output_type -> warden.service.v1.CreateFolderResponse
+	4,  // 19: warden.service.v1.WardenFolderService.GetFolder:output_type -> warden.service.v1.GetFolderResponse
+	6,  // 20: warden.service.v1.WardenFolderService.ListFolders:output_type -> warden.service.v1.ListFoldersResponse
+	8,  // 21: warden.service.v1.WardenFolderService.UpdateFolder:output_type -> warden.service.v1.UpdateFolderResponse
+	17, // 22: warden.service.v1.WardenFolderService.DeleteFolder:output_type -> google.protobuf.Empty
+	11, // 23: warden.service.v1.WardenFolderService.MoveFolder:output_type -> warden.service.v1.MoveFolderResponse
+	14, // 24: warden.service.v1.WardenFolderService.GetFolderTree:output_type -> warden.service.v1.GetFolderTreeResponse
+	18, // [18:25] is the sub-list for method output_type
+	11, // [11:18] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_warden_service_v1_folder_proto_init() }
@@ -1071,6 +1085,7 @@ func file_warden_service_v1_folder_proto_init() {
 	if File_warden_service_v1_folder_proto != nil {
 		return
 	}
+	file_warden_service_v1_secret_proto_init()
 	file_warden_service_v1_folder_proto_msgTypes[0].OneofWrappers = []any{}
 	file_warden_service_v1_folder_proto_msgTypes[1].OneofWrappers = []any{}
 	file_warden_service_v1_folder_proto_msgTypes[5].OneofWrappers = []any{}
