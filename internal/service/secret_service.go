@@ -342,12 +342,14 @@ func (s *SecretService) ListSecrets(ctx context.Context, req *wardenV1.ListSecre
 		status = &s
 	}
 
-	secrets, _, err := s.secretRepo.List(ctx, tenantID, req.FolderId, status, req.NameFilter, page, pageSize)
+	secrets, total, err := s.secretRepo.List(ctx, tenantID, req.FolderId, status, req.NameFilter, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter secrets by permission
+	// Filter secrets by permission. The total reflects the unfiltered row
+	// count from the repo so the client's pager shows the right number of
+	// pages; permission-inaccessible rows simply don't appear on the page.
 	accessibleSecrets := make([]*wardenV1.Secret, 0, len(secrets))
 	for _, sec := range secrets {
 		if err := s.checker.CanReadSecret(ctx, tenantID, userID, sec.ID); err == nil {
@@ -357,7 +359,7 @@ func (s *SecretService) ListSecrets(ctx context.Context, req *wardenV1.ListSecre
 
 	return &wardenV1.ListSecretsResponse{
 		Secrets: accessibleSecrets,
-		Total:   uint32(len(accessibleSecrets)),
+		Total:   uint32(total),
 	}, nil
 }
 

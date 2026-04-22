@@ -166,6 +166,8 @@ func (x *CreateFolderRequest) Redact() string {
 	// Safe field: Name
 
 	// Safe field: Description
+
+	// Safe field: InitialPermissions
 	return x.String()
 }
 

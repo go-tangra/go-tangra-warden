@@ -241,6 +241,40 @@ func (m *CreateFolderRequest) validate(all bool) error {
 
 	// no validation rules for Description
 
+	for idx, item := range m.GetInitialPermissions() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, CreateFolderRequestValidationError{
+						field:  fmt.Sprintf("InitialPermissions[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, CreateFolderRequestValidationError{
+						field:  fmt.Sprintf("InitialPermissions[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return CreateFolderRequestValidationError{
+					field:  fmt.Sprintf("InitialPermissions[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if m.ParentId != nil {
 		// no validation rules for ParentId
 	}
