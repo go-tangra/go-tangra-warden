@@ -43,6 +43,18 @@ menus:
       - platform:admin
       - tenant:manager
 
+  - id: warden-generator
+    parent_id: warden
+    type: MENU
+    name: Password Generator
+    path: generator
+    component: app/warden/generator/index.vue
+    icon: lucide:dices
+    order: 4
+    authority:
+      - platform:admin
+      - tenant:manager
+
 dashboard_widgets:
   - id: warden.total_secrets
     name: Total Secrets

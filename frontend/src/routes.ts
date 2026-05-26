@@ -34,6 +34,16 @@ const routes: RouteRecordRaw[] = [
         },
         component: () => import('./views/permission/index.vue'),
       },
+      {
+        path: 'generator',
+        name: 'WardenGenerator',
+        meta: {
+          icon: 'lucide:dices',
+          title: 'warden.menu.generator',
+          authority: ['platform:admin', 'tenant:manager'],
+        },
+        component: () => import('./views/generator/index.vue'),
+      },
     ],
   },
 ];

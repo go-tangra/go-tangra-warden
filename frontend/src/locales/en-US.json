@@ -3,6 +3,7 @@
     "warden": "Secret Manager",
     "secrets": "Secrets",
     "permissions": "Permissions",
+    "generator": "Password Generator",
     "search": "Search"
   },
   "page": {
@@ -113,6 +114,25 @@
       "canWrite": "Can Write",
       "canDelete": "Can Delete",
       "canShare": "Can Share"
+    },
+    "generator": {
+      "title": "Password Generator",
+      "length": "Length",
+      "uppercase": "Uppercase",
+      "lowercase": "Lowercase",
+      "numbers": "Numbers",
+      "symbols": "Symbols",
+      "excludeAmbiguous": "Exclude ambiguous characters",
+      "regenerate": "Regenerate",
+      "copy": "Copy to clipboard",
+      "copied": "Password copied to clipboard",
+      "copyFailed": "Failed to copy password",
+      "selectAtLeastOne": "Select at least one character set",
+      "bits": "bits",
+      "weak": "Weak",
+      "fair": "Fair",
+      "strong": "Strong",
+      "veryStrong": "Very Strong"
     },
     "bitwarden": {
       "import": "Import",
