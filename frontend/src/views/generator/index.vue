@@ -158,10 +158,10 @@ onMounted(() => generate());
         <!-- Generated password output -->
         <div class="flex items-center gap-2">
           <div
-            class="flex-1 break-all rounded-md border border-solid border-gray-200 bg-gray-50 px-4 py-3 font-mono text-lg dark:border-gray-700 dark:bg-gray-800"
+            class="bg-muted border-border flex-1 break-all rounded-md border border-solid px-4 py-3 font-mono text-lg"
           >
             <span v-if="password">{{ password }}</span>
-            <span v-else class="text-gray-400">
+            <span v-else class="text-muted-foreground">
               {{ $t('warden.page.generator.selectAtLeastOne') }}
             </span>
           </div>
@@ -192,7 +192,7 @@ onMounted(() => generate());
             class="flex-1"
           />
           <Tag :color="strength.color">{{ strength.label }}</Tag>
-          <span class="whitespace-nowrap text-sm text-gray-500">
+          <span class="text-muted-foreground whitespace-nowrap text-sm">
             {{ entropyBits }} {{ $t('warden.page.generator.bits') }}
           </span>
         </div>
