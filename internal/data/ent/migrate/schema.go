@@ -312,7 +312,7 @@ var (
 			},
 			{
 				Name:    "secretversion_vault_path",
-				Unique:  true,
+				Unique:  false,
 				Columns: []*schema.Column{WardenSecretVersionsColumns[6]},
 			},
 		},

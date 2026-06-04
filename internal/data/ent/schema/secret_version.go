@@ -79,7 +79,10 @@ func (SecretVersion) Indexes() []ent.Index {
 		index.Fields("secret_id", "version_number").Unique(),
 		// For listing versions of a secret
 		index.Fields("secret_id"),
-		// For Vault path lookups
-		index.Fields("vault_path").Unique(),
+		// For Vault path lookups. NOT unique: every version of a secret
+		// shares the secret's vault_path (Vault KV v2 keeps all versions at
+		// one path, keyed by version number), so a unique constraint here
+		// makes the 2nd password update of any secret fail with a conflict.
+		index.Fields("vault_path"),
 	}
 }
