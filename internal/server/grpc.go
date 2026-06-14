@@ -12,6 +12,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
 
+	commonV1 "github.com/go-tangra/go-tangra-common/gen/go/common/service/v1"
 	wardenV1 "github.com/go-tangra/go-tangra-warden/gen/go/warden/service/v1"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
@@ -46,6 +47,7 @@ func NewGRPCServer(
 	systemSvc *service.SystemService,
 	bitwardenTransferSvc *service.BitwardenTransferService,
 	backupSvc *service.BackupService,
+	sqlBackupSvc *service.SqlBackupService,
 	userSvc *service.UserService,
 ) *grpc.Server {
 	cfg := ctx.GetConfig()
@@ -129,6 +131,9 @@ func NewGRPCServer(
 	wardenV1.RegisterRedactedWardenSystemServiceServer(srv, systemSvc, nil)
 	wardenV1.RegisterRedactedWardenBitwardenTransferServiceServer(srv, bitwardenTransferSvc, nil)
 	wardenV1.RegisterRedactedBackupServiceServer(srv, backupSvc, nil)
+	// Streaming SQL-dump backup (+ Vault secret extras); replaces the legacy
+	// per-field warden.service.v1.BackupService, kept registered during transition.
+	commonV1.RegisterBackupServiceServer(srv, sqlBackupSvc)
 	wardenV1.RegisterRedactedWardenUserServiceServer(srv, userSvc, nil)
 
 	return srv

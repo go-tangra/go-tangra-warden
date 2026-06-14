@@ -7,10 +7,7 @@
 package main
 
 import (
-	gocontext "context"
-
 	"github.com/go-kratos/kratos/v2"
-	"github.com/go-tangra/go-tangra-common/viewer"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 	"github.com/go-tangra/go-tangra-warden/internal/client"
 	"github.com/go-tangra/go-tangra-warden/internal/data"
@@ -29,58 +26,52 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	collector := metrics.NewCollector(context)
 	entClient, cleanup, err := data.NewEntClient(context)
 	if err != nil {
 		return nil, nil, err
 	}
 	auditLogRepo := data.NewAuditLogRepo(context, entClient)
 	folderRepo := data.NewFolderRepo(context, entClient)
-	permissionRepo := data.NewPermissionRepo(context, entClient)
-	permissionStore := providers.ProvidePermissionStore(permissionRepo)
 	secretRepo := data.NewSecretRepo(context, entClient)
-	resourceLookup := providers.ProvideResourceLookup(folderRepo, secretRepo)
-	engine := providers.ProvideAuthzEngine(permissionStore, resourceLookup, context)
-	checker := providers.ProvideAuthzChecker(engine)
-	collector := metrics.NewCollector(context)
 	secretVersionRepo := data.NewSecretVersionRepo(context, entClient)
+	permissionRepo := data.NewPermissionRepo(context, entClient)
 	vaultClient, cleanup2, err := data.NewVaultClient(context)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	kvStore := data.NewVaultKVStore(vaultClient)
+	permissionStore := providers.ProvidePermissionStore(permissionRepo)
+	resourceLookup := providers.ProvideResourceLookup(folderRepo, secretRepo)
+	engine := providers.ProvideAuthzEngine(permissionStore, resourceLookup, context)
+	checker := providers.ProvideAuthzChecker(engine)
 	folderService := service.NewFolderService(context, folderRepo, secretRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
 	secretService := service.NewSecretService(context, secretRepo, secretVersionRepo, folderRepo, permissionRepo, kvStore, checker, collector)
 	permissionService := service.NewPermissionService(context, permissionRepo, folderRepo, secretRepo, engine, checker)
 	statisticsRepo := data.NewStatisticsRepo(context, entClient)
-	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
-	backupService := service.NewBackupService(context, entClient, kvStore)
-	adminClient, cleanup3, err := client.NewAdminClient(context, certManager)
+	sharingClient, cleanup3, err := client.NewSharingClient(context, certManager)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	sharingClient, cleanup4, err := client.NewSharingClient(context, certManager)
+	systemService := service.NewSystemService(context, vaultClient, statisticsRepo, sharingClient)
+	bitwardenTransferService := service.NewBitwardenTransferService(context, secretRepo, folderRepo, secretVersionRepo, permissionRepo, kvStore, checker, collector)
+	backupService := service.NewBackupService(context, entClient, kvStore)
+	sqlBackupService := service.NewSqlBackupService(context, entClient, kvStore)
+	adminClient, cleanup4, err := client.NewAdminClient(context, certManager)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	systemService := service.NewSystemService(context, vaultClient, statisticsRepo, sharingClient)
 	userService := service.NewUserService(context, adminClient)
-	grpcServer := server.NewGRPCServer(context, certManager, collector, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, userService)
+	grpcServer := server.NewGRPCServer(context, certManager, collector, auditLogRepo, folderService, secretService, permissionService, systemService, bitwardenTransferService, backupService, sqlBackupService, userService)
 	httpServer := server.NewHTTPServer(context)
-
-	// Seed Prometheus metrics from database
-	seedCtx := viewer.NewSystemViewerContext(gocontext.Background())
-	collector.Seed(seedCtx, statisticsRepo)
-
 	app := newApp(context, grpcServer, httpServer)
 	return app, func() {
-		secretService.Close()
-		collector.Stop(gocontext.Background())
 		cleanup4()
 		cleanup3()
 		cleanup2()
