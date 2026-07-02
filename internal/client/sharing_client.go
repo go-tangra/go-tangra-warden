@@ -13,10 +13,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	grpcMD "google.golang.org/grpc/metadata"
 
 	sharingpb "buf.build/gen/go/go-tangra/sharing/protocolbuffers/go/sharing/service/v1"
 	sharinggrpc "buf.build/gen/go/go-tangra/sharing/grpc/go/sharing/service/v1/servicev1grpc"
 
+	"github.com/go-tangra/go-tangra-common/grpcx"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 )
 
@@ -81,9 +83,16 @@ func loadSharingClientTLS(l *log.Helper) (credentials.TransportCredentials, erro
 
 	caCertPath := filepath.Join(certsDir, "ca", "ca.crt")
 
-	clientCertPath := filepath.Join(certsDir, "warden", "warden.crt")
-	clientKeyPath := filepath.Join(certsDir, "warden", "warden.key")
+	// cert.Ensure() writes the client-auth cert used for dialing peers to
+	// {CERTS_DIR}/client/client.{crt,key}. Prefer that; fall back to the
+	// legacy convention paths for older cert layouts.
+	clientCertPath := filepath.Join(certsDir, "client", "client.crt")
+	clientKeyPath := filepath.Join(certsDir, "client", "client.key")
 
+	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
+		clientCertPath = filepath.Join(certsDir, "warden", "warden.crt")
+		clientKeyPath = filepath.Join(certsDir, "warden", "warden.key")
+	}
 	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
 		clientCertPath = filepath.Join(certsDir, "warden-server", "server.crt")
 		clientKeyPath = filepath.Join(certsDir, "warden-server", "server.key")
@@ -116,10 +125,38 @@ func loadSharingClientTLS(l *log.Helper) (credentials.TransportCredentials, erro
 
 // CreateShare creates a share link for a secret via the sharing service.
 func (c *SharingClient) CreateShare(ctx context.Context, req *sharingpb.CreateShareRequest) (*sharingpb.CreateShareResponse, error) {
-	resp, err := c.share.CreateShare(ctx, req)
+	// Forward the caller's auth identity so sharing-service can, in turn,
+	// call back into warden's GetSecret/GetSecretPassword with the original
+	// user's permissions. Without this the callback runs with no user_id and
+	// warden rejects it with PermissionDenied.
+	resp, err := c.share.CreateShare(forwardAuthMetadata(ctx), req)
 	if err != nil {
 		c.log.Errorf("Failed to create share: %v", err)
 		return nil, fmt.Errorf("create share: %w", err)
 	}
 	return resp, nil
+}
+
+// forwardAuthMetadata copies the x-md-global-* auth headers from the incoming
+// gRPC context into the outgoing context. warden's SharingClient uses a raw
+// gRPC connection (no Kratos client middleware), so incoming metadata is not
+// propagated automatically and must be forwarded explicitly.
+func forwardAuthMetadata(ctx context.Context) context.Context {
+	in, ok := grpcMD.FromIncomingContext(ctx)
+	if !ok {
+		return ctx
+	}
+	out := grpcMD.MD{}
+	for _, key := range []string{
+		grpcx.MDTenantID,
+		grpcx.MDUserID,
+		grpcx.MDUsername,
+		grpcx.MDRoles,
+		grpcx.MDClientIP,
+	} {
+		if vals := in.Get(key); len(vals) > 0 {
+			out.Set(key, vals...)
+		}
+	}
+	return grpcMD.NewOutgoingContext(ctx, out)
 }
