@@ -153,6 +153,11 @@ func forwardAuthMetadata(ctx context.Context) context.Context {
 		grpcx.MDUsername,
 		grpcx.MDRoles,
 		grpcx.MDClientIP,
+		// Forward the gateway's claim assertion alongside the claims it signs,
+		// so sharing (and its callback into warden) still sees a valid
+		// signature under claims-binding enforce mode.
+		grpcx.MDClaimsSig,
+		grpcx.MDClaimsExp,
 	} {
 		if vals := in.Get(key); len(vals) > 0 {
 			out.Set(key, vals...)

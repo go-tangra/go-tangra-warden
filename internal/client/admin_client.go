@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	adminstubpb "github.com/go-tangra/go-tangra-common/gen/go/common/admin_stub/v1"
+	"github.com/go-tangra/go-tangra-common/grpcx"
 	"github.com/go-tangra/go-tangra-warden/internal/cert"
 	paginationV1 "github.com/tx7do/go-crud/api/gen/go/pagination/v1"
 )
@@ -53,6 +54,9 @@ func NewAdminClient(ctx *bootstrap.Context, certManager *cert.CertManager) (*Adm
 	conn, err := grpc.NewClient(
 		endpoint,
 		transportCreds,
+		// Present the shared module secret so the admin :7787 control plane
+		// authenticates these UserService/RoleService calls.
+		grpc.WithChainUnaryInterceptor(grpcx.ModuleSecretUnaryClientInterceptor()),
 	)
 	if err != nil {
 		return nil, nil, err
