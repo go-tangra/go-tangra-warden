@@ -4,6 +4,8 @@ import { ref, computed, h } from 'vue';
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { LucideEye, LucideEyeOff, LucideRotateCcw } from 'shell/vben/icons';
 
+import { formatDateTime as sharedFormatDateTime } from '../../datetime';
+
 import {
   Table,
   Button,
@@ -39,7 +41,7 @@ const title = computed(() => $t('warden.page.version.title'));
 function formatDateTime(value: string | undefined) {
   if (!value) return '-';
   try {
-    return new Date(value).toLocaleString();
+    return sharedFormatDateTime(value);
   } catch {
     return value;
   }

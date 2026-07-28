@@ -4,6 +4,8 @@ import { ref, computed, onUnmounted } from 'vue';
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { LucideEye, LucideEyeOff, LucideCopy, LucidePlus, LucideTrash } from 'shell/vben/icons';
 
+import { formatDateTime as sharedFormatDateTime } from '../../datetime';
+
 import {
   Form,
   FormItem,
@@ -300,7 +302,7 @@ function statusToName(status: string | undefined) {
 function formatDateTime(value: string | undefined) {
   if (!value) return '-';
   try {
-    return new Date(value).toLocaleString();
+    return sharedFormatDateTime(value);
   } catch {
     return value;
   }
