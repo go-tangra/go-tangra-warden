@@ -37,7 +37,19 @@ func NewAdminClient(ctx *bootstrap.Context, certManager *cert.CertManager) (*Adm
 	}
 
 	var transportCreds grpc.DialOption
-	if certManager != nil && certManager.IsTLSEnabled() {
+	switch {
+	// REGISTRATION_INSECURE=1 means admin-service exposes its control plane on a
+	// plain-gRPC port, which is the deployed default. The module still holds a
+	// real client cert, so without this check the branch below picks mTLS up and
+	// every call dies with "first record does not look like a TLS handshake" —
+	// the module is registered (the registration client honours this same flag)
+	// while its admin API calls all fail. Same contract as the registration
+	// client in go-tangra-common; this client must not re-derive it differently.
+	case os.Getenv("REGISTRATION_INSECURE") == "1":
+		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
+		l.Info("Admin gRPC client configured (plaintext: REGISTRATION_INSECURE=1)")
+
+	case certManager != nil && certManager.IsTLSEnabled():
 		tlsCreds, err := loadAdminClientTLS(certManager, l)
 		if err != nil {
 			l.Warnf("Failed to load mTLS credentials for admin client: %v, falling back to insecure", err)
@@ -46,7 +58,8 @@ func NewAdminClient(ctx *bootstrap.Context, certManager *cert.CertManager) (*Adm
 			transportCreds = grpc.WithTransportCredentials(tlsCreds)
 			l.Info("Admin gRPC client configured with mTLS")
 		}
-	} else {
+
+	default:
 		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
 		l.Info("Admin gRPC client configured (plaintext to admin-service)")
 	}
