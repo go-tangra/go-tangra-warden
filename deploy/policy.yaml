@@ -1,0 +1,9 @@
+# Freya service-to-service policy for warden: the gateway forwards browser
+# traffic and gRPC ingress; health probes come from the gateway too.
+version: warden-dev-1
+rules:
+  - id: gateway-forwards
+    from: ["spiffe://example.org/svc/gateway"]
+    to: ["warden"]
+    operations: ["*"]
+    effect: allow

@@ -1,0 +1,46 @@
+# Development configuration for the warden module on the platform stack
+# (services/gateway/deploy/compose.yaml + the standalone Vault/db from
+# services/warden/deploy/compose.yaml). Never use these values outside a
+# workstation.
+service_name: warden
+trust_domain: example.org
+env: dev
+identity:
+  provider: file
+  file: { cert: ../../.dev/ca/warden.pem, key: ../../.dev/ca/warden.key, bundle: ../../.dev/ca/ca.pem }
+authz: { source: file, path: deploy/policy.yaml }
+server: { grpc_addr: 127.0.0.1:9843, http_addr: 127.0.0.1:9844 }
+admin: { addr: 127.0.0.1:9490 }
+discovery:
+  static:
+    gateway: ["127.0.0.1:9643"]
+    auth: ["127.0.0.1:9543"]
+limits:
+  max_request_bytes: 16842752 # Bitwarden / backup uploads (16 MiB + slack); JSON handlers keep their own 64 KiB cap
+limits_warden:
+  transfer_max_bytes: 16777216
+db:
+  dsn: postgres://warden_app:dev@127.0.0.1:5433/warden?sslmode=disable
+  migrate_dsn: postgres://postgres:dev@127.0.0.1:5433/warden?sslmode=disable
+valkey:
+  addresses: ["127.0.0.1:6380"]
+  username: warden
+  password: dev
+  allow_plaintext: true
+vault:
+  address: http://127.0.0.1:8200
+  mount: warden
+  role_id_file: deploy/.vault/role_id
+  secret_id_file: deploy/.vault/secret_id
+  allow_plaintext: true
+gateway:
+  service: gateway
+  issuer: https://localhost:8443
+share:
+  public_origin: https://localhost:8443
+mail:
+  transport: smtp
+  host: 127.0.0.1
+  port: 1026
+  from: warden@example.org
+  allow_plaintext: true

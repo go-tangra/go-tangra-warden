@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bitwarden export accepted by warden (unencrypted, individual vault)",
+  "type": "object",
+  "required": ["encrypted", "items"],
+  "properties": {
+    "encrypted": { "const": false },
+    "folders": { "type": "array", "maxItems": 10000, "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string", "maxLength": 64 }, "name": { "type": "string", "minLength": 1, "maxLength": 400 } } } },
+    "items": {
+      "type": "array", "maxItems": 50000,
+      "items": {
+        "type": "object", "required": ["type", "name"],
+        "properties": {
+          "id": { "type": "string", "maxLength": 64 },
+          "folderId": { "type": ["string", "null"], "maxLength": 64 },
+          "type": { "type": "integer", "description": "1 = login (imported); 2 secure note, 3 card, 4 identity are reported as skipped" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "notes": { "type": ["string", "null"], "maxLength": 2000 },
+          "favorite": { "type": "boolean" },
+          "login": { "type": ["object", "null"], "properties": {
+            "username": { "type": ["string", "null"], "maxLength": 200 },
+            "password": { "type": ["string", "null"], "maxLength": 4096 },
+            "totp": { "type": ["string", "null"], "maxLength": 512 },
+            "uris": { "type": ["array", "null"], "maxItems": 20, "items": { "type": "object", "properties": { "uri": { "type": ["string", "null"], "maxLength": 2048 }, "match": { "type": ["integer", "null"] } } } } } },
+          "fields": { "type": ["array", "null"], "maxItems": 50, "items": { "type": "object", "properties": { "name": { "type": ["string", "null"], "maxLength": 100 }, "value": { "type": ["string", "null"], "maxLength": 1000 }, "type": { "type": ["integer", "null"] } } } },
+          "passwordHistory": { "type": ["array", "null"], "maxItems": 100, "items": { "type": "object", "required": ["password"], "properties": { "lastUsedDate": { "type": "string" }, "password": { "type": "string", "maxLength": 4096 } } } }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
