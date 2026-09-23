@@ -7,3 +7,10 @@ rules:
     to: ["warden"]
     operations: ["*"]
     effect: allow
+  # ticket resolves its relay-token / SMTP-password references at use time. The
+  # call still carries a platform token and passes warden's per-secret check.
+  - id: ticket-secrets
+    from: ["spiffe://example.org/svc/ticket"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/GetPassword"]
+    effect: allow
