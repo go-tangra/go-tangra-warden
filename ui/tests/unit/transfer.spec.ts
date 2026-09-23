@@ -11,6 +11,12 @@ const validated = { folders: 3, items: 20, created: 0, renamed: 0, skipped: 2, o
 const done = { ...validated, created: 18, renamed: 2 }
 const sample = JSON.stringify({ encrypted: false, folders: [], items: [{ type: 1, name: 'x', login: { password: 'p' } }] })
 
+// Validation reads the file on the event loop (FileReader), so give it a tick after clicking.
+async function settle(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 20))
+  await flushPromises()
+}
+
 async function pickFile(root: ParentNode, text: string, name = 'export.json'): Promise<void> {
   const input = root.querySelector('[data-test="import-file"] input[type="file"]') as HTMLInputElement
   const file = new File([text], name, { type: 'application/json' })
@@ -77,24 +83,37 @@ describe('BitwardenImportDialog', () => {
     const w = mountInLayout(BitwardenImportDialog, { modelValue: true, folderId: 'f1', onImported: (r: unknown) => imported.push(r) })
     await flushPromises()
     const dialog = document.body.querySelector('[data-test="import-dialog"]')!
-    expect((dialog.querySelector('[data-test="import-validate"]') as HTMLButtonElement).disabled).toBe(true)
-    await pickFile(dialog, 'not json')
-    expect(dialog.querySelector('[data-test="import-error"]')!.textContent).toContain('not valid JSON')
-    await pickFile(dialog, sample)
-    expect((dialog.querySelector('[data-test="import-validate"]') as HTMLButtonElement).disabled).toBe(false)
+    // No file: the schema blocks validation without a request.
     click(dialog, '[data-test="import-validate"]')
-    await flushPromises()
+    await settle()
+    expect(calls.some((c) => c.includes('/validate'))).toBe(false)
+    expect(dialog.querySelector('[role=alert]')!.textContent).toContain('Choose an export file')
+    await pickFile(dialog, 'not json')
+    click(dialog, '[data-test="import-validate"]')
+    await settle()
+    expect(dialog.textContent).toContain('not valid JSON')
+    expect(calls.some((c) => c.includes('/validate'))).toBe(false)
+    await pickFile(dialog, JSON.stringify({ encrypted: true, items: [] }))
+    click(dialog, '[data-test="import-validate"]')
+    await settle()
+    expect(dialog.textContent).toContain('Encrypted exports')
+    await pickFile(dialog, sample)
+    click(dialog, '[data-test="import-validate"]')
+    await settle()
     expect(calls.some((c) => c.includes('validate?folder_id=f1'))).toBe(true)
-    expect(dialog.querySelector('[data-test="count-items"]')!.textContent).toBe('20')
-    expect(dialog.querySelector('[data-test="count-collisions"]')!.textContent).toBe('2')
+    const summary = dialog.querySelector('[data-test="import-summary"]')!.textContent!
+    expect(summary).toContain('Logins20')
+    expect(summary).toContain('Name collisions2')
     expect(dialog.querySelector('[data-test="collision-list"]')!.textContent).toContain('Service 000')
     expect(dialog.querySelector('[data-test="problem-list"]')!.textContent).toContain('missing password')
-    ;(dialog.querySelector('[data-test="strategy-skip"] input') as HTMLInputElement).click()
+    const strategy = dialog.querySelector('[data-test="strategy"] select') as HTMLSelectElement
+    strategy.value = 'skip'
+    strategy.dispatchEvent(new Event('change'))
     await flushPromises()
     click(dialog, '[data-test="import-go"]')
     await flushPromises()
     expect(calls.some((c) => c.includes('duplicates=skip'))).toBe(true)
-    expect(dialog.querySelector('[data-test="import-result"]')!.textContent).toContain('18 created, 2 renamed')
+    expect(dialog.querySelector('[data-test="import-summary"]')!.textContent).toContain('18 created, 2 renamed')
     expect(imported.length).toBe(1)
     w.unmount()
   })
@@ -106,7 +125,7 @@ describe('BitwardenImportDialog', () => {
     const dialog = document.body.querySelector('[data-test="import-dialog"]')!
     await pickFile(dialog, sample)
     click(dialog, '[data-test="import-validate"]')
-    await flushPromises()
+    await settle()
     expect(dialog.querySelector('[data-test="import-error"]')!.textContent).toContain('not allowed')
     w.unmount()
   })
@@ -119,11 +138,10 @@ describe('secrets view transfer actions', () => {
     stubFetch(() => ({ status: 200, body: { items: [] } }))
     const w = mountInLayout(SecretsView, {}, [{ action: 'read', subject: 'Secret' }, { action: 'export', subject: 'Transfer' }])
     await flushPromises()
-    click(document.body, '[data-test="more-actions"]')
+    click(document.body, '[data-test="more-actions"] button')
     await flushPromises()
-    expect(document.body.querySelector('[data-test="action-export"]')).not.toBeNull()
-    expect(document.body.querySelector('[data-test="action-import"]')).toBeNull()
-    expect(document.body.querySelector('[data-test="action-backup"]')).toBeNull()
+    const items = Array.from(document.body.querySelectorAll('[role=menuitem]')).map((m) => m.textContent?.trim())
+    expect(items).toEqual(['Export to Bitwarden'])
     w.unmount()
     const w2 = mountInLayout(SecretsView, {}, [{ action: 'read', subject: 'Secret' }])
     await flushPromises()

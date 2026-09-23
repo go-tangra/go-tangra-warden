@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SecretsView from '@/views/secrets/index.vue'
-import SecretDrawer from '@/components/SecretDrawer.vue'
+import SecretDetails from '@/components/SecretDetails.vue'
 import VersionDrawer from '@/components/VersionDrawer.vue'
 import { useSecrets } from '@/stores/secrets'
 import { ApiError, describe as describeError } from '@/api/client'
 import { click, folder, mountInLayout, node, secret, stubFetch, type, viewer } from './helpers'
+import { secretCreateSchema, secretUpdateSchema } from '@/schemas'
 
 const infra = folder('f1', 'Infra', '/Infra')
 const db = secret('s1', 'prod-db', { folder_id: 'f1', folder_path: '/Infra', has_totp: true })
@@ -73,8 +74,8 @@ describe('secrets store', () => {
     expect(describeError(new ApiError(409, 'conflict'))).toContain('sibling')
     expect(describeError(new ApiError(400, 'validation_failed'))).toContain('fields')
     expect(describeError(new ApiError(429, 'rate_limited'))).toContain('Too many')
-    expect(describeError(new ApiError(0, 'network'))).toContain('unavailable')
-    expect(describeError(new ApiError(418, 'teapot'))).toContain('teapot')
+    expect(describeError(new ApiError(0, 'network'))).toContain('could not be reached')
+    expect(describeError(new ApiError(418, 'teapot'))).toContain('Something') // unknown reasons are never echoed
     expect(describeError(new Error('x'))).toContain('Something')
     await s.list(null)
     expect(s.error).toBe('vault_unavailable')
@@ -96,20 +97,23 @@ describe('secrets view', () => {
     // The root lists its subfolder as a row; no secrets means no "empty" marker while folders show.
     expect(w.findAll('[data-test="folder-row"]').length).toBe(1)
     expect(w.find('[data-test="empty"]').exists()).toBe(false)
-    await w.find('[data-test="folder-f1"]').trigger('click')
+    await w.findAll('[role=treeitem]')[1]!.trigger('click') // Infra under the synthetic root
     await flushPromises()
     expect(w.findAll('[data-test="secret-row"]').length).toBe(1)
     expect(w.findAll('[data-test="folder-row"]').length).toBe(0)
-    expect(w.find('[data-test="current-path"]').text()).toBe('/Infra')
-    await w.find('[data-test="secret-open-s1"]').trigger('click')
+    expect(w.find('[data-test="current-path"]').text()).toContain('Infra')
+    await w.find('[data-test="secret-row"]').trigger('click')
     await flushPromises()
-    const drawer = document.body.querySelector('[data-test="secret-drawer"]')!
+    const drawer = document.body.querySelector('aside[role=dialog]')!
     expect(drawer.textContent).not.toContain('WARDEN-MARKER')
     const field = drawer.querySelector('[data-test="revealed-password"] input') as HTMLInputElement
     expect(field.type).toBe('password')
     click(drawer, '[data-test="reveal"]')
     await flushPromises()
     expect((drawer.querySelector('[data-test="revealed-password"] input') as HTMLInputElement).value).toBe('WARDEN-MARKER-PW-ui')
+    // Nothing revealed is persisted anywhere in the browser.
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
     // New secret button appears for a writable folder.
     expect(w.find('[data-test="new-secret"]').exists()).toBe(true)
     w.unmount()
@@ -124,40 +128,52 @@ describe('secrets view', () => {
   })
 })
 
-describe('SecretDrawer', () => {
+describe('secret create/edit (schema + drawer)', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('validates, creates with the password and copies after reveal', async () => {
+  it('the create schema needs a name and a password, refuses bad metadata JSON; the edit schema has no password', () => {
+    expect(secretCreateSchema.safeParse({ name: ' new one ', password: '' }).success).toBe(false)
+    expect(secretCreateSchema.safeParse({ name: 'x', password: 'p', metadata: 'not json' }).success).toBe(false)
+    expect(secretCreateSchema.parse({ name: ' new one ', password: 'WARDEN-MARKER-PW-ui', folder_id: 'f1', metadata: '{"env":"prod"}' })).toEqual({ name: 'new one', password: 'WARDEN-MARKER-PW-ui', folder_id: 'f1', metadata: { env: 'prod' } })
+    expect(secretCreateSchema.safeParse({ name: 'x', password: 'p', totp: 'not a seed!' }).success).toBe(false)
+    expect('password' in secretUpdateSchema.shape).toBe(false)
+  })
+
+  it('creates with the password from the drawer (blocked until valid) and never echoes it', async () => {
     const posted: unknown[] = []
     stubFetch((url, init) => {
       if (url === '/api/warden/v1/secrets' && init?.method === 'POST') {
         posted.push(JSON.parse(String(init.body)))
         return { status: 201, body: secret('s9', 'new one') }
       }
-      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [] } }
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
       return { status: 200, body: { items: [] } }
     })
-    const saved: unknown[] = []
-    const w = mountInLayout(SecretDrawer, { modelValue: true, secret: null, folderId: 'f1', onSaved: (s: unknown) => saved.push(s) })
+    const w = mountInLayout(SecretsView, {})
     await flushPromises()
-    const drawer = document.body.querySelector('[data-test="secret-drawer"]')!
-    click(drawer, '[data-test="secret-save"]')
+    await w.find('[data-test="new-secret"]').trigger('click')
     await flushPromises()
-    expect(posted.length).toBe(0)
-    type(drawer, '[data-test="secret-name"]', ' new one ')
-    type(drawer, '[data-test="secret-password"]', 'WARDEN-MARKER-PW-ui')
-    type(drawer, '[data-test="secret-metadata"]', 'not json')
-    await flushPromises()
-    click(drawer, '[data-test="secret-save"]')
+    const drawer = document.body.querySelector('aside[role=dialog]')!
+    const save = () => (Array.from(drawer.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Create') as HTMLButtonElement).click()
+    save()
     await flushPromises()
     expect(posted.length).toBe(0)
-    type(drawer, '[data-test="secret-metadata"]', '{"env":"prod"}')
+    const set = (sel: string, v: string) => { const el = drawer.querySelector<HTMLInputElement>(sel)!; el.value = v; el.dispatchEvent(new Event('input')) }
+    set('input[data-field="name"]', ' new one ')
+    set('input[data-field="password"]', 'WARDEN-MARKER-PW-ui')
+    set('textarea[data-field="metadata"]', 'not json')
     await flushPromises()
-    click(drawer, '[data-test="secret-save"]')
+    save()
+    await flushPromises()
+    expect(posted.length).toBe(0)
+    expect(drawer.textContent).toContain('valid JSON')
+    set('textarea[data-field="metadata"]', '{"env":"prod"}')
+    await flushPromises()
+    save()
     await flushPromises()
     expect(posted.length).toBe(1)
-    expect(posted[0]).toMatchObject({ name: 'new one', password: 'WARDEN-MARKER-PW-ui', folder_id: 'f1', metadata: { env: 'prod' } })
-    expect(saved.length).toBe(1)
+    expect(posted[0]).toMatchObject({ name: 'new one', password: 'WARDEN-MARKER-PW-ui', metadata: { env: 'prod' } })
+    expect((drawer.querySelector('input[data-field="password"]') as HTMLInputElement).type).toBe('password')
     w.unmount()
   })
 
@@ -169,31 +185,29 @@ describe('SecretDrawer', () => {
       return { status: 200, body: { items: [] } }
     })
     const ro = { ...db, permissions: viewer }
-    const w = mountInLayout(SecretDrawer, { modelValue: true, secret: ro, folderId: null })
+    const w = mountInLayout(SecretDetails, { secret: ro })
     await flushPromises()
-    const drawer = document.body.querySelector('[data-test="secret-drawer"]')!
-    expect(drawer.querySelector('[data-test="secret-save"]')).toBeNull()
-    expect(drawer.querySelector('[data-test="change-password"]')).toBeNull()
-    expect(drawer.querySelector('[data-test="secret-delete"]')).toBeNull()
-    click(drawer, '[data-test="totp-load"]')
+    const panel = w.element as HTMLElement
+    expect(panel.querySelector('[data-test="change-password"]')).toBeNull()
+    expect(panel.querySelector('[data-test="shares-panel"]')).toBeNull()
+    click(panel, '[data-test="totp-load"]')
     await flushPromises()
-    expect(drawer.querySelector('[data-test="totp-code"]')!.textContent).toBe('654321')
-    expect(drawer.querySelector('[data-test="totp-expires"]')!.textContent).toBe('2s')
+    expect(panel.querySelector('[data-test="totp-code"]')!.textContent).toBe('654321')
+    expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('2s')
     vi.advanceTimersByTime(1000)
     await flushPromises()
-    expect(drawer.querySelector('[data-test="totp-expires"]')!.textContent).toBe('1s')
+    expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('1s')
     w.unmount()
     vi.useRealTimers()
   })
 
   it('reports vault outages from reveal', async () => {
     stubFetch(() => ({ status: 503, body: { reason: 'vault_unavailable' } }))
-    const w = mountInLayout(SecretDrawer, { modelValue: true, secret: db, folderId: null })
+    const w = mountInLayout(SecretDetails, { secret: db })
     await flushPromises()
-    const drawer = document.body.querySelector('[data-test="secret-drawer"]')!
-    click(drawer, '[data-test="reveal"]')
+    click(w.element as HTMLElement, '[data-test="reveal"]')
     await flushPromises()
-    expect(drawer.querySelector('[data-test="drawer-error"]')!.textContent).toContain('vault')
+    expect(w.find('[data-test="drawer-error"]').text()).toContain('vault')
     w.unmount()
   })
 })

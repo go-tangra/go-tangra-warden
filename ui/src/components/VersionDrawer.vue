@@ -1,97 +1,79 @@
 <script setup lang="ts">
+// Version history of one secret with per-version reveal and restore.
+// Module-unique (vault versioning), built on kit primitives.
 import { ref, watch } from 'vue'
+import { UiDrawer, UiAlert, UiButton, UiBadge, UiForm, UiInput, UiDialog, UiEmptyState } from '@freya/ui'
+import { useZodForm } from '@freya/ui/forms'
 import { describe } from '@/api/client'
 import type { Secret, SecretVersion } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'
+import { restoreSchema } from '@/schemas'
 
 const props = defineProps<{ modelValue: boolean; secret: Secret | null }>()
 const emit = defineEmits<{ 'update:modelValue': [v: boolean]; restored: [version: number] }>()
 const secrets = useSecrets()
 const items = ref<SecretVersion[]>([])
 const error = ref('')
-const busy = ref(false)
 const shown = ref<Record<number, string>>({})
 const restoring = ref<SecretVersion | null>(null)
-const comment = ref('')
-
-watch(
-  () => [props.modelValue, props.secret] as const,
-  async ([open, s]) => {
-    if (!open || !s) return
-    shown.value = {}
-    error.value = ''
-    try {
-      items.value = await secrets.versions(s.id)
-    } catch (e) {
-      error.value = describe(e)
-    }
-  },
-  { immediate: true },
-)
-
+watch(() => [props.modelValue, props.secret] as const, async ([open, s]) => {
+  if (!open || !s) return
+  shown.value = {}
+  error.value = ''
+  try {
+    items.value = await secrets.versions(s.id)
+  } catch (e) {
+    error.value = describe(e)
+  }
+}, { immediate: true })
 async function show(v: SecretVersion): Promise<void> {
   if (!props.secret) return
   try {
-    const m = await secrets.reveal(props.secret.id, v.version)
-    shown.value = { ...shown.value, [v.version]: m.password }
+    shown.value = { ...shown.value, [v.version]: (await secrets.reveal(props.secret.id, v.version)).password }
   } catch (e) {
     error.value = describe(e)
   }
 }
-
-async function restore(): Promise<void> {
-  if (!props.secret || !restoring.value) return
-  busy.value = true
-  error.value = ''
-  try {
-    const nv = await secrets.restore(props.secret.id, restoring.value.version, comment.value)
-    items.value = await secrets.versions(props.secret.id)
+const restoreForm = useZodForm(restoreSchema, {
+  initial: { comment: '' },
+  onSubmit: async (v) => {
+    const nv = await secrets.restore(props.secret!.id, restoring.value!.version, v.comment ?? '')
+    items.value = await secrets.versions(props.secret!.id)
     emit('restored', nv)
+  },
+  onSuccess: () => {
     restoring.value = null
-    comment.value = ''
-  } catch (e) {
-    error.value = describe(e)
-  } finally {
-    busy.value = false
-  }
-}
+    restoreForm.reset({ comment: '' })
+  },
+})
 </script>
 
 <template>
-  <v-navigation-drawer :model-value="modelValue" location="right" temporary width="480" data-test="version-drawer" @update:model-value="emit('update:modelValue', $event)">
-    <v-toolbar density="compact" color="transparent">
-      <v-toolbar-title>Versions of {{ secret?.name }}</v-toolbar-title>
-      <v-btn icon="mdi-close" aria-label="Close" variant="text" data-test="versions-close" @click="emit('update:modelValue', false)" />
-    </v-toolbar>
-    <v-alert v-if="error" type="error" variant="tonal" density="compact" class="mx-4" data-test="versions-error">{{ error }}</v-alert>
-    <v-list lines="two" aria-label="Versions">
-      <v-list-item v-for="v in items" :key="v.version" :data-test="'version-' + v.version">
-        <v-list-item-title>
-          Version {{ v.version }}
-          <v-chip v-if="v.current" size="x-small" color="primary" class="ml-1" data-test="version-current">current</v-chip>
-          <v-chip v-if="v.material_missing" size="x-small" color="warning" class="ml-1">material missing</v-chip>
-        </v-list-item-title>
-        <v-list-item-subtitle>{{ v.comment || v.source }} · {{ new Date(v.created_at).toLocaleString() }}</v-list-item-subtitle>
-        <div class="d-flex align-center ga-2 mt-1">
-          <code v-if="shown[v.version]" :data-test="'version-password-' + v.version">{{ shown[v.version] }}</code>
-          <v-btn v-else size="small" variant="text" :data-test="'version-show-' + v.version" @click="show(v)">Show</v-btn>
-          <v-btn v-if="!v.current && secret?.permissions.write" size="small" variant="tonal" :data-test="'version-restore-' + v.version" @click="restoring = v">Restore</v-btn>
+  <UiDrawer :model-value="modelValue" :title="'Versions of ' + (secret?.name ?? '')" size="md" data-test="version-drawer" @update:model-value="emit('update:modelValue', $event)">
+    <UiAlert v-if="error" kind="error" class="mb-3" data-test="versions-error">{{ error }}</UiAlert>
+    <UiEmptyState v-if="!items.length" title="No versions" />
+    <ul v-else class="divide-y divide-base-300" aria-label="Versions">
+      <li v-for="v in items" :key="v.version" class="py-3" :data-test="'version-' + v.version">
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="font-medium">Version {{ v.version }}</span>
+          <UiBadge v-if="v.current" color="primary" data-test="version-current">current</UiBadge>
+          <UiBadge v-if="v.material_missing" color="warning">material missing</UiBadge>
         </div>
-      </v-list-item>
-    </v-list>
-    <v-dialog :model-value="restoring !== null" max-width="440" @update:model-value="restoring = null">
-      <v-card data-test="confirm-restore">
-        <v-card-title>Restore version {{ restoring?.version }}?</v-card-title>
-        <v-card-text>
-          The password of version {{ restoring?.version }} becomes a new current version; history is kept.
-          <v-text-field v-model="comment" label="Comment" class="mt-2" data-test="restore-comment" />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="restoring = null">Cancel</v-btn>
-          <v-btn color="primary" :loading="busy" data-test="confirm-restore-yes" @click="restore">Restore</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-  </v-navigation-drawer>
+        <div class="text-xs text-base-content/70">{{ v.comment || v.source }} · {{ new Date(v.created_at).toLocaleString() }}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <code v-if="shown[v.version]" class="rounded-field bg-base-200 px-2 py-0.5 text-sm" :data-test="'version-password-' + v.version">{{ shown[v.version] }}</code>
+          <UiButton v-else size="xs" variant="text" :data-test="'version-show-' + v.version" @click="show(v)">Show</UiButton>
+          <UiButton v-if="!v.current && secret?.permissions.write" size="xs" variant="soft" :data-test="'version-restore-' + v.version" @click="restoring = v">Restore</UiButton>
+        </div>
+      </li>
+    </ul>
+    <UiDialog :model-value="restoring !== null" :title="'Restore version ' + (restoring?.version ?? '') + '?'" size="sm" data-test="confirm-restore" @update:model-value="restoring = null">
+      <p class="mb-2 text-sm">The password of version {{ restoring?.version }} becomes a new current version; history is kept.</p>
+      <UiForm :form="restoreForm"><UiInput v-bind="restoreForm.field('comment')" label="Comment" data-test="restore-comment" /></UiForm>
+      <template #actions>
+        <UiButton variant="text" @click="restoring = null">Cancel</UiButton>
+        <UiButton :loading="restoreForm.submitting.value" data-test="confirm-restore-yes" @click="restoreForm.submit()">Restore</UiButton>
+      </template>
+    </UiDialog>
+  </UiDrawer>
 </template>

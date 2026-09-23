@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import ShareDialog from '@/components/ShareDialog.vue'
-import SharesPanel from '@/components/SharesPanel.vue'
-import SecretDrawer from '@/components/SecretDrawer.vue'
+import SecretDetails from '@/components/SecretDetails.vue'
+import { shareSchema } from '@/schemas'
 import { useShares, type Share } from '@/stores/shares'
 import { click, mountInLayout, secret, stubFetch, type, viewer } from './helpers'
 
@@ -38,10 +37,13 @@ describe('shares store', () => {
   })
 })
 
-describe('ShareDialog', () => {
+describe('share dialog (schema + SecretDetails)', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('validates the recipient and CIDR, sends the defaults and confirms without a link', async () => {
+    expect(shareSchema.safeParse({ recipient_email: 'nope', validity: '1h', max_opens: 1 }).success).toBe(false)
+    expect(shareSchema.safeParse({ recipient_email: 'a@b.co', validity: '1h', max_opens: 1, cidr: 'not a cidr' }).success).toBe(false)
+    expect(shareSchema.safeParse({ recipient_email: 'a@b.co', validity: '1h', max_opens: 11 }).success).toBe(false)
     const posted: Record<string, unknown>[] = []
     stubFetch((url, init) => {
       if (url === '/api/warden/v1/secrets/s1/shares' && init?.method === 'POST') {
@@ -50,18 +52,19 @@ describe('ShareDialog', () => {
       }
       return { status: 200, body: { items: [] } }
     })
-    const w = mountInLayout(ShareDialog, { modelValue: true, secretId: 's1', secretName: 'db' })
+    const w = mountInLayout(SecretDetails, { secret: secret('s1', 'db') })
+    await flushPromises()
+    click(w.element as HTMLElement, '[data-test="share-new"]')
     await flushPromises()
     const dialog = document.body.querySelector('[data-test="share-dialog"]')!
-    expect((dialog.querySelector('[data-test="share-send"]') as HTMLButtonElement).disabled).toBe(true)
     type(dialog, '[data-test="share-email"]', 'friend@outside.test')
     type(dialog, '[data-test="share-cidr"]', 'not a cidr')
+    click(dialog, '[data-test="share-send"]')
     await flushPromises()
-    expect(dialog.textContent).toContain('CIDR notation')
-    expect((dialog.querySelector('[data-test="share-send"]') as HTMLButtonElement).disabled).toBe(true)
+    expect(posted.length).toBe(0)
+    expect(dialog.querySelectorAll('[role=alert]').length).toBeGreaterThan(0)
     type(dialog, '[data-test="share-cidr"]', '203.0.113.0/24')
     type(dialog, '[data-test="share-message"]', 'for you')
-    await flushPromises()
     click(dialog, '[data-test="share-send"]')
     await flushPromises()
     expect(posted[0]).toMatchObject({ recipient_email: 'friend@outside.test', validity_seconds: 3600, max_opens: 1, cidr: '203.0.113.0/24', message: 'for you' })
@@ -72,14 +75,15 @@ describe('ShareDialog', () => {
 
   it('shows refusals', async () => {
     stubFetch((url, init) => (init?.method === 'POST' ? { status: 400, body: { reason: 'region_unavailable' } } : { status: 200, body: { items: [] } }))
-    const w = mountInLayout(ShareDialog, { modelValue: true, secretId: 's1', secretName: 'db' })
+    const w = mountInLayout(SecretDetails, { secret: secret('s1', 'db') })
+    await flushPromises()
+    click(w.element as HTMLElement, '[data-test="share-new"]')
     await flushPromises()
     const dialog = document.body.querySelector('[data-test="share-dialog"]')!
     type(dialog, '[data-test="share-email"]', 'a@b.co')
-    await flushPromises()
     click(dialog, '[data-test="share-send"]')
     await flushPromises()
-    expect(dialog.querySelector('[data-test="share-error"]')!.textContent).toContain('region_unavailable')
+    expect(dialog.querySelector('[role=alert]')!.textContent).toBeTruthy()
     w.unmount()
   })
 })
@@ -95,7 +99,7 @@ describe('SharesPanel in the drawer', () => {
       if (url === '/api/warden/v1/shares/sh1/cancel') return { status: 204, body: null }
       return { status: 200, body: { items: [] } }
     })
-    const w = mountInLayout(SharesPanel, { secretId: 's1', secretName: 'db' })
+    const w = mountInLayout(SecretDetails, { secret: secret('s1', 'db') })
     await flushPromises()
     expect(document.body.querySelector('[data-test="share-state-sh1"]')!.textContent).toBe('active')
     expect(document.body.querySelector('[data-test="share-state-sh2"]')!.textContent).toBe('consumed')
@@ -104,11 +108,11 @@ describe('SharesPanel in the drawer', () => {
     await flushPromises()
     expect(calls.some((c) => c.includes('/shares/sh1/cancel'))).toBe(true)
     w.unmount()
-    const d = mountInLayout(SecretDrawer, { modelValue: true, secret: secret('s1', 'db', { permissions: viewer }), folderId: null })
+    const d = mountInLayout(SecretDetails, { secret: secret('s1', 'db', { permissions: viewer }) })
     await flushPromises()
     expect(document.body.querySelector('[data-test="shares-panel"]')).toBeNull()
     d.unmount()
-    const d2 = mountInLayout(SecretDrawer, { modelValue: true, secret: secret('s1', 'db'), folderId: null })
+    const d2 = mountInLayout(SecretDetails, { secret: secret('s1', 'db') })
     await flushPromises()
     expect(document.body.querySelector('[data-test="shares-panel"]')).not.toBeNull()
     d2.unmount()

@@ -1,19 +1,17 @@
-// Standalone development entry: mounts the warden routes in a bare Vuetify app
+// Standalone development entry: mounts the warden routes in a bare kit shell
 // against the gateway (npm run dev). In the platform the shell mounts
 // ./routes and ./nav from the federated remote instead.
-import { createApp } from 'vue'
+import { createApp, h } from 'vue'
 import { createPinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
-import { createVuetify } from 'vuetify'
+import { createRouter, createWebHistory, RouterView } from 'vue-router'
 import { abilitiesPlugin } from '@casl/vue'
 import { createMongoAbility } from '@casl/ability'
-import 'vuetify/styles'
-import '@mdi/font/css/materialdesignicons.css'
+import { UiAppShell } from '@freya/ui'
+import './dev.css'
 import { routes } from '@/remote/routes'
 
-const app = createApp({ template: '<v-app><v-main><router-view /></v-main></v-app>' })
+const app = createApp({ render: () => h(UiAppShell, { title: 'warden (dev)', hideNav: true }, () => h(RouterView)) })
 app.use(createPinia())
 app.use(createRouter({ history: createWebHistory('/'), routes }))
-app.use(createVuetify({ theme: { defaultTheme: 'light', themes: { light: { variables: { 'medium-emphasis-opacity': 0.74 } } } } }))
 app.use(abilitiesPlugin, createMongoAbility([{ action: 'manage', subject: 'all' }]), { useGlobalProperties: true })
 app.mount('#app')

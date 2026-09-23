@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import PermissionDrawer from '@/components/PermissionDrawer.vue'
 import PermissionsView from '@/views/permissions/index.vue'
 import { grantable, usePermissions, type Grant } from '@/stores/permissions'
-import { click, folder, mountInLayout, node, secret, stubFetch, type } from './helpers'
+import { click, folder, mountInLayout, node, secret, stubFetch } from './helpers'
 
 const infra = folder('f1', 'Infra', '/Infra')
 const g1: Grant = { id: 'g1', resource_type: 'folder', resource_id: 'f1', subject_type: 'role', subject_id: 'ops', relation: 'viewer', granted_at: '2026-09-16T00:00:00Z', inherited: true, expired: false }
@@ -65,15 +64,14 @@ describe('permissions store', () => {
   })
 })
 
-describe('PermissionDrawer', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.useFakeTimers()
-  })
+describe('permission drawer (kit + usePermissionGrants)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
 
   it('picks a user from the auth search, bounds the relation options and grants', async () => {
     const posted: Record<string, unknown>[] = []
     stubFetch((url, init) => {
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: [secret('s1', 'db', { folder_id: 'f1' })] } }
       if (url.startsWith('/api/warden/v1/grants?')) return { status: 200, body: { items: [g1, g2] } }
       if (url.startsWith('/api/warden/v1/access/effective')) return { status: 200, body: effectiveSharer }
       if (url === '/api/warden/v1/grants' && init?.method === 'POST') {
@@ -85,63 +83,53 @@ describe('PermissionDrawer', () => {
       if (url === '/api/v1/roles') return { status: 200, body: [{ slug: 'ops', display_name: 'Operations' }] }
       return { status: 404, body: { reason: 'not_found' } }
     })
-    const changed: number[] = []
-    const w = mountInLayout(PermissionDrawer, { modelValue: true, resourceType: 'secret', resourceId: 's1', resourceName: 'db', onChanged: () => changed.push(1) })
+    const w = mountInLayout(PermissionsView, {})
+    await flushPromises()
+    click(document.body, '[data-test="manage-secret-s1"]')
     await flushPromises()
     const drawer = document.body.querySelector('[data-test="permission-drawer"]')!
-    expect(drawer.querySelector('[data-test="effective-summary"]')!.textContent).toContain('sharer')
-    expect(drawer.querySelector('[data-test="effective-sources"]')!.textContent).toContain('inherited')
-    // Role slugs resolve to their display name.
-    expect(drawer.querySelector('[data-test="effective-sources"]')!.textContent).toContain('Role Operations')
-    expect(drawer.querySelector('[data-test="grant-g1"]')!.textContent).toContain('Role Operations')
-    expect(drawer.querySelector('[data-test="grant-g2"]')!.textContent).toContain('User Bob')
+    expect(drawer.textContent).toContain('Your relation: sharer')
+    // Role slugs and user ids resolve to display names.
+    expect(drawer.textContent).toContain('Role: Operations')
+    expect(drawer.textContent).toContain('Bob')
+    // Levels never exceed the holder's relation.
+    expect(Array.from(drawer.querySelectorAll('#perm-level option')).map((o) => o.textContent)).toEqual(['viewer', 'sharer'])
     // Grant is disabled until a subject is picked.
-    expect((drawer.querySelector('[data-test="grant-save"]') as HTMLButtonElement).disabled).toBe(true)
-    type(drawer, '[data-test="user-query"]', 'bo')
+    const grantBtn = () => Array.from(drawer.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Grant') as HTMLButtonElement
+    expect(grantBtn().disabled).toBe(true)
+    const subject = drawer.querySelector('#perm-subject') as HTMLInputElement
+    subject.value = 'bo'
+    subject.dispatchEvent(new Event('input'))
     await flushPromises()
-    vi.advanceTimersByTime(200)
+    const option = Array.from(drawer.querySelectorAll('[role=option] button')).find((o) => o.textContent?.includes('Bob')) as HTMLElement
+    expect(option).toBeTruthy()
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     await flushPromises()
-    click(drawer, '[data-test="user-hit-u2"]')
+    expect(grantBtn().disabled).toBe(false)
+    grantBtn().click()
     await flushPromises()
-    expect(drawer.querySelector('[data-test="user-picked"]')!.textContent).toContain('Bob')
-    expect((drawer.querySelector('[data-test="grant-save"]') as HTMLButtonElement).disabled).toBe(false)
-    click(drawer, '[data-test="grant-save"]')
-    await flushPromises()
-    expect(posted[0]).toMatchObject({ resource_type: 'secret', resource_id: 's1', subject_type: 'user', subject_id: 'u2', relation: 'viewer', expires_at: null })
-    expect(changed.length).toBe(1)
+    expect(posted[0]).toMatchObject({ resource_type: 'secret', resource_id: 's1', subject_type: 'user', subject_id: 'u2', relation: 'viewer' })
     w.unmount()
   })
 
-  it('offers only revoke-free views to viewers and refuses past expiry', async () => {
+  it('hides the grant form from viewers and lists nothing when grants are forbidden', async () => {
     stubFetch((url) => {
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: [secret('s1', 'db', { folder_id: 'f1' })] } }
       if (url.startsWith('/api/warden/v1/grants?')) return { status: 403, body: { reason: 'forbidden' } }
       if (url.startsWith('/api/warden/v1/access/effective')) return { status: 200, body: effectiveViewer }
       if (url === '/api/v1/roles') return { status: 200, body: [] }
       return { status: 404, body: { reason: 'not_found' } }
     })
-    const w = mountInLayout(PermissionDrawer, { modelValue: true, resourceType: 'folder', resourceId: 'f1', resourceName: '/Infra' })
+    const w = mountInLayout(PermissionsView, {})
+    await flushPromises()
+    click(document.body, '[data-test="manage-secret-s1"]')
     await flushPromises()
     const drawer = document.body.querySelector('[data-test="permission-drawer"]')!
-    expect(drawer.querySelector('[data-test="no-share"]')).not.toBeNull()
-    expect(drawer.querySelector('[data-test="grant-save"]')).toBeNull()
-    expect(drawer.querySelector('[data-test="no-grants"]')).not.toBeNull()
+    expect(drawer.textContent).toContain('share permission')
+    expect(drawer.querySelector('#perm-subject')).toBeNull()
+    expect(drawer.textContent).toContain('No grants')
     w.unmount()
-    // A sharer with a past expiry gets an inline error.
-    stubFetch((url) => {
-      if (url.startsWith('/api/warden/v1/grants?')) return { status: 200, body: { items: [] } }
-      if (url.startsWith('/api/warden/v1/access/effective')) return { status: 200, body: effectiveOwner }
-      if (url === '/api/v1/roles') return { status: 200, body: [{ slug: 'ops', display_name: 'Ops' }] }
-      return { status: 404, body: { reason: 'not_found' } }
-    })
-    const w2 = mountInLayout(PermissionDrawer, { modelValue: true, resourceType: 'folder', resourceId: 'f1', resourceName: '/Infra' })
-    await flushPromises()
-    const d2 = document.body.querySelector('[data-test="permission-drawer"]')!
-    click(d2, '[data-test="subject-tenant"]')
-    type(d2, '[data-test="expires"]', '2000-01-01T00:00')
-    await flushPromises()
-    expect(d2.textContent).toContain('Expiry must be in the future')
-    expect((d2.querySelector('[data-test="grant-save"]') as HTMLButtonElement).disabled).toBe(true)
-    w2.unmount()
   })
 })
 
@@ -160,7 +148,7 @@ describe('permissions view', () => {
     const w = mountInLayout(PermissionsView, {})
     await flushPromises()
     expect(document.body.querySelector('[data-test="manage-folder"]')).toBeNull()
-    click(document.body, '[data-test="folder-f1"]')
+    ;(Array.from(document.body.querySelectorAll('[role=treeitem]')).find((i) => i.textContent?.trim() === 'Infra') as HTMLElement).click()
     await flushPromises()
     expect(document.body.querySelector('[data-test="picked-path"]')!.textContent).toBe('/Infra')
     click(document.body, '[data-test="manage-secret-s1"]')

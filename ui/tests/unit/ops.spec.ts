@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import GeneratorView from '@/views/generator/index.vue'
-import StatsCard from '@/components/StatsCard.vue'
-import AuditTable from '@/components/AuditTable.vue'
+import SecretsView from '@/views/secrets/index.vue'
 import { generateLocal, satisfies, useOps } from '@/stores/ops'
 import { click, mountInLayout, stubFetch, type } from './helpers'
 
@@ -58,15 +57,18 @@ describe('generator view', () => {
     await flushPromises()
     expect(written).toEqual(['Srv3rP@ssw0rd!xyz123'])
     // No class → inline error, no request.
-    for (const k of ['lower', 'upper', 'digits', 'symbols']) (document.body.querySelector(`[data-test="gen-${k}"] input`) as HTMLInputElement).click()
+    const toggle = (k: string, on: boolean) => { const el = document.body.querySelector(`[data-test="gen-${k}"] input`) as HTMLInputElement; el.checked = on; el.dispatchEvent(new Event('change')) }
+    for (const k of ['lower', 'upper', 'digits', 'symbols']) toggle(k, false)
     await flushPromises()
     click(document.body, '[data-test="gen-go"]')
     await flushPromises()
-    expect(document.body.querySelector('[data-test="generator-error"]')!.textContent).toContain('at least one')
+    expect(document.body.querySelector('[role=alert]')!.textContent).toContain('at least one')
     expect(bodies.length).toBe(1)
     // Local source never calls the service.
-    ;(document.body.querySelector('[data-test="gen-lower"] input') as HTMLInputElement).click()
-    ;(document.body.querySelector('[data-test="gen-local"] input') as HTMLInputElement).click()
+    toggle('lower', true)
+    const src = document.body.querySelector('[data-test="gen-source"] select') as HTMLSelectElement
+    src.value = 'local'
+    src.dispatchEvent(new Event('change'))
     await flushPromises()
     click(document.body, '[data-test="gen-go"]')
     await flushPromises()
@@ -81,7 +83,7 @@ describe('generator view', () => {
     await flushPromises()
     click(document.body, '[data-test="gen-go"]')
     await flushPromises()
-    expect(document.body.querySelector('[data-test="generator-error"]')!.textContent).toContain('not allowed')
+    expect(document.body.querySelector('[role=alert]')!.textContent).toContain('not allowed')
     w.unmount()
   })
 })
@@ -106,27 +108,25 @@ describe('stats card and audit table', () => {
       }
       return { status: 404, body: { reason: 'not_found' } }
     })
-    const w = mountInLayout(StatsCard, {})
+    const a = mountInLayout(SecretsView, {})
     await flushPromises()
-    expect(document.body.querySelector('[data-test="stat-secrets"]')!.textContent).toBe('12')
-    expect(document.body.querySelector('[data-test="stat-grants"]')!.textContent).toContain('owner 5')
-    expect(document.body.querySelector('[data-test="stat-shares"]')!.textContent).toBe('none')
-    w.unmount()
-    const a = mountInLayout(AuditTable, {})
+    expect(document.body.querySelector('[data-test="stat-secrets"]')!.textContent).toContain('12')
+    expect(document.body.textContent).toContain('owner 5')
+    click(document.body, '[data-test="toggle-audit"]')
     await flushPromises()
     expect(document.body.querySelectorAll('[data-test="audit-row"]').length).toBe(1)
     expect(document.body.textContent).toContain('secret_password_read')
     expect(document.body.textContent).not.toContain('version')
     // Actors resolve to display names through one batch lookup; subjects show the resolved name.
     expect(looked).toEqual([['u1']])
-    expect(document.body.querySelector('[data-test="audit-actor-cell"]')!.textContent).toBe('Alice')
-    expect(document.body.querySelector('[data-test="audit-subject-cell"]')!.textContent).toBe('secret DB admin')
-    click(document.body, '[data-test="audit-more"]')
+    expect(document.body.querySelector('[data-test="audit-row"]')!.textContent).toContain('Alice')
+    expect(document.body.querySelector('[data-test="audit-row"]')!.textContent).toContain('secret DB admin')
+    ;(Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Load more') as HTMLButtonElement).click()
     await flushPromises()
     expect(document.body.querySelectorAll('[data-test="audit-row"]').length).toBe(2)
     // Only new ids are looked up; unknown ones stay as ids.
     expect(looked).toEqual([['u1'], ['u2']])
-    expect(document.body.querySelectorAll('[data-test="audit-actor-cell"]')[1]!.textContent).toBe('u2')
+    expect(document.body.querySelectorAll('[data-test="audit-row"]')[1]!.textContent).toContain('u2')
     type(document.body, '[data-test="audit-type"]', 'access_refused')
     await flushPromises()
     click(document.body, '[data-test="audit-apply"]')

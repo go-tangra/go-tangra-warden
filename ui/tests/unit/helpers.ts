@@ -1,10 +1,7 @@
 import { vi } from 'vitest'
-import { defineComponent, h, type Plugin } from 'vue'
+import { type Plugin } from 'vue'
 import { mount } from '@vue/test-utils'
-import { VLayout } from 'vuetify/components'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { abilitiesPlugin } from '@casl/vue'
 import { createMongoAbility } from '@casl/ability'
 import type { Folder, FolderNode, Secret } from '@/api/types'
@@ -22,7 +19,8 @@ export function stubFetch(handler: (url: string, init?: RequestInit) => Reply) {
 }
 
 export function plugins(rules: Array<{ action: string; subject: string }> = [{ action: 'manage', subject: 'all' }]): Array<Plugin | [Plugin, ...unknown[]]> {
-  return [createVuetify({ components, directives }), [abilitiesPlugin as Plugin, createMongoAbility(rules), { useGlobalProperties: true }]]
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div/>' } }] })
+  return [router, [abilitiesPlugin as Plugin, createMongoAbility(rules), { useGlobalProperties: true }]]
 }
 
 export const perms = { read: true, write: true, delete: true, share: true }
@@ -69,12 +67,7 @@ export function click(root: ParentNode, selector: string): void {
   el.click()
 }
 
-/**
- * Mounts a component that needs Vuetify's layout (navigation drawers) inside
- * a v-layout, as the platform shell's v-app provides in production. Listeners
- * go in `attrs` as onX functions.
- */
+/** Mounts a view/component attached to the document (kit drawers teleport to body). Listeners go in `attrs` as onX functions. */
 export function mountInLayout(comp: unknown, attrs: Record<string, unknown>, rules?: Array<{ action: string; subject: string }>) {
-  const Wrapper = defineComponent({ render: () => h(VLayout, null, () => [h(comp as never, attrs)]) })
-  return mount(Wrapper, { global: { plugins: plugins(rules) }, attachTo: document.body })
+  return mount(comp as never, { props: attrs as never, global: { plugins: plugins(rules) }, attachTo: document.body })
 }

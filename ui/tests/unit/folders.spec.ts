@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SecretsView from '@/views/secrets/index.vue'
-import FolderTree from '@/components/FolderTree.vue'
 import { useFolders } from '@/stores/folders'
-import { click, folder, mountInLayout, node, plugins, stubFetch, type, viewer } from './helpers'
+import { click, folder, mountInLayout, node, stubFetch, type, viewer } from './helpers'
+import { useToast } from '@freya/ui'
 
 const infra = folder('f1', 'Infra', '/Infra')
 const db = folder('f2', 'Databases', '/Infra/Databases', 'f1')
@@ -43,17 +43,20 @@ describe('folders store', () => {
   })
 })
 
-describe('FolderTree', () => {
-  it('expands, selects and marks the root', async () => {
-    const w = mount(FolderTree, { props: { nodes: [node(infra, [node(db)])], selected: null }, global: { plugins: plugins() } })
-    expect(w.find('[data-test="folder-f2"]').exists()).toBe(false)
-    await w.find('[data-test="folder-toggle-f1"]').trigger('click')
-    expect(w.find('[data-test="folder-f2"]').exists()).toBe(true)
-    await w.find('[data-test="folder-f2"]').trigger('click')
-    expect(w.emitted('select')?.[0]).toEqual(['f2'])
-    await w.find('[data-test="folder-root"]').trigger('click')
-    expect(w.emitted('select')?.[1]).toEqual([null])
-    expect(w.find('[aria-selected="true"]').exists()).toBe(true)
+describe('folder tree (kit UiTree)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  it('shows the root above the vault folders, selects on click and reflects the selection', async () => {
+    stubFetch((url) => (url === '/api/warden/v1/folders/tree' ? { status: 200, body: { items: [node(infra, [node(db)])] } } : { status: 200, body: { items: [], next: null } }))
+    const w = mountInLayout(SecretsView, {})
+    await flushPromises()
+    const items = () => w.findAll('[role=treeitem]')
+    expect(items().map((i) => i.text())).toEqual(['Root', 'Infra', 'Databases'])
+    expect(items()[0]!.attributes('aria-selected')).toBe('true')
+    await items()[2]!.trigger('click')
+    await flushPromises()
+    expect(items()[2]!.attributes('aria-selected')).toBe('true')
+    expect(w.find('[data-test="current-path"]').text()).toContain('Databases')
+    w.unmount()
   })
 })
 
@@ -76,10 +79,11 @@ describe('explorer folder management', () => {
     await flushPromises()
     // The right pane lists the root's subfolders like a file manager.
     expect(w.findAll('[data-test="folder-row"]').length).toBe(2)
-    await w.find('[data-test="folder-f1"]').trigger('click')
+    const treeItem = (label: string) => w.findAll('[role=treeitem]').find((i) => i.text() === label)!
+    await treeItem('Infra').trigger('click')
     await flushPromises()
-    expect(w.find('[data-test="current-path"]').text()).toBe('/Infra')
-    expect(w.findAll('[data-test="folder-row"]').map((r) => r.text())).toEqual(['Databases0 secret(s)—'])
+    expect(w.find('[data-test="current-path"]').text()).toContain('Infra')
+    expect(w.findAll('[data-test="folder-row"]').map((r) => r.text())).toEqual(['Databases0 secret(s)———'])
     // New folder under the selection.
     click(document.body, '[data-test="folder-new"]')
     await flushPromises()
@@ -88,9 +92,9 @@ describe('explorer folder management', () => {
     click(document.body, '[data-test="folder-create"]')
     await flushPromises()
     expect(calls.some((c) => c.startsWith('POST /api/warden/v1/folders ') && c.includes('"parent_id":"f1"') && c.includes('"name":"Prod"'))).toBe(true)
-    expect(w.find('[data-test="notice"]').text()).toContain('created')
+    expect(useToast().items.some((t) => t.title === 'Folder created.')).toBe(true)
     // Rename conflicts surface as a folder error.
-    await w.find('[data-test="folder-f1"]').trigger('click')
+    await treeItem('Infra').trigger('click')
     await flushPromises()
     click(document.body, '[data-test="folder-rename"]')
     await flushPromises()
@@ -110,13 +114,15 @@ describe('explorer folder management', () => {
     click(document.body, '[data-test="folder-delete"]')
     await flushPromises()
     const dialog = document.body.querySelector('[data-test="confirm-folder-delete"]')!
-    ;(dialog.querySelector('[data-test="folder-recursive"] input') as HTMLInputElement).click()
+    const rec = dialog.querySelector('[data-test="folder-recursive"] input') as HTMLInputElement
+    rec.checked = true
+    rec.dispatchEvent(new Event('change'))
     click(dialog, '[data-test="confirm-folder-delete-yes"]')
     await flushPromises()
     expect(calls.some((c) => c.includes('/f1/remove') && c.includes('"recursive":true'))).toBe(true)
     expect(w.find('[data-test="current-path"]').text()).toBe('')
     // A viewer-only folder disables the write controls.
-    await w.find('[data-test="folder-f3"]').trigger('click')
+    await treeItem('Shared').trigger('click')
     await flushPromises()
     expect(w.find('[data-test="folder-new"]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test="folder-delete"]').attributes('disabled')).toBeDefined()

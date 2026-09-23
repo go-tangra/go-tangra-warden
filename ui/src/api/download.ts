@@ -1,14 +1,22 @@
-import { CSRF_HEADER, csrfToken, ApiError } from './client'
+import { api, ApiError } from './client'
+
+/** Hands arbitrary text to the browser as a downloaded file. */
+export function saveText(text: string, filename: string, mime = 'application/octet-stream'): number {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return text.length
+}
 
 /** POSTs to an export route and hands the JSON body to the browser as a file. */
 export async function downloadJSON(path: string, filename: string): Promise<number> {
-  const res = await fetch(path, { method: 'POST', headers: { Accept: 'application/json', [CSRF_HEADER]: csrfToken() }, credentials: 'same-origin' })
-  if (!res.ok) {
-    const data: unknown = await res.json().catch(() => ({}))
-    const reason = typeof data === 'object' && data !== null && 'reason' in data ? String((data as { reason: unknown }).reason) : 'error'
-    throw new ApiError(res.status, reason)
-  }
-  const blob = await res.blob()
+  const body = await api<unknown>('POST', path)
+  const blob = new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
