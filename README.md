@@ -1,94 +1,129 @@
 # go-tangra-warden
 
-Secret and credential management service built on HashiCorp Vault. Provides secure secret storage with folder organization, version history, Zanzibar-style permissions, and Bitwarden import/export.
+Tenant credential vault for the
+[go-tangra v4 platform](https://github.com/go-tangra/go-tangra).
 
-## Features
+Secrets (name, username, password, host, description, free-form metadata,
+optional TOTP seed) live in an unlimited-depth folder tree. **Passwords and seeds
+are stored only in HashiCorp Vault** (KV v2, one path per tenant and secret,
+AppRole authentication); TimescaleDB holds metadata, version references and
+checksums. Access is Zanzibar-style (owner / editor / viewer / sharer on folders
+or secrets, granted to users, roles or the tenant, with expiry, inherited down
+the tree). External e-mail shares, a password generator, Bitwarden import/export
+and tenant backups complete the operator surface. Every operation is audited;
+material never reaches the database, the audit trail, logs, search or backups
+taken without material.
 
-- **Secret Management** — CRUD operations with username, password, host URL, metadata
-- **Version History** — Full password version tracking with rollback capability
-- **Folder Organization** — Hierarchical folder structure with unlimited depth
-- **Zanzibar Permissions** — Fine-grained access control (Owner/Editor/Viewer/Sharer)
-- **Vault Backend** — Passwords stored in HashiCorp Vault KV v2, not in the database
-- **Bitwarden Transfer** — Import from and export to Bitwarden format
-- **Multi-Tenant** — Complete tenant isolation with separate Vault paths
-- **Audit Trail** — Creator/updater tracking on all operations
+Security model: [`docs/security-model.md`](docs/security-model.md).
+Operations: [`docs/operations.md`](docs/operations.md).
+Dependencies: [`docs/dependencies.md`](docs/dependencies.md).
+Design history: `specs/005-warden-secrets`.
 
-## gRPC Services
+## Place in the platform
 
-| Service | Endpoints | Purpose |
-|---------|-----------|---------|
-| WardenSecretService | Create, Get, GetPassword, List, Update, UpdatePassword, Delete, Move, Search, Versions, Restore | Secret lifecycle |
-| WardenFolderService | Create, Get, List, Update, Delete, Move, GetTree | Folder hierarchy |
-| WardenPermissionService | Grant, Revoke, List, Check, ListAccessible, GetEffective | Access control |
-| WardenBitwardenTransferService | Export, Import, Validate | Bitwarden interop |
-| WardenSystemService | Health, GetInfo, CheckVault | System status |
-
-**Port:** 9300 (gRPC) with REST endpoints via gRPC-Gateway
-
-## Permission Model
-
-| Relation | Permissions |
-|----------|------------|
-| **Owner** | Read, Write, Delete, Share |
-| **Editor** | Read, Write |
-| **Viewer** | Read |
-| **Sharer** | Read, Share |
-
-Permissions inherit through the folder hierarchy. Supports user, role, and tenant-level grants with optional expiration.
-
-## Vault Integration
-
-- **Authentication**: AppRole with role_id/secret_id files
-- **Engine**: KV v2 secrets engine
-- **Path Structure**: `{mount_path}/{tenant_id}/{secret_id}`
-- **Token Renewal**: Automatic lifecycle management
-
-```yaml
-warden:
-  vault:
-    address: "http://vault:8200"
-    mount_path: "secret"
-    role_id_file: "/vault-credentials/role_id"
-    secret_id_file: "/vault-credentials/secret_id"
+```
+go-tangra/go-tangra          platform module + @go-tangra/ui kit
+        |
+go-tangra-auth  <---->  go-tangra-portal (gateway)  <---->  go-tangra-warden
+                              |                               ^
+                         go-tangra-lcm (SVIDs)        ipam, ticket, dns (warden sdk)
 ```
 
-## Bitwarden Transfer
+- Built on `github.com/go-tangra/go-tangra/v4` (mTLS transports, identity,
+  service policy, audit, observability).
+- Verifies platform tokens and seeds its permissions and built-in role grants
+  with the auth SDK (`github.com/go-tangra/go-tangra-auth/sdk/v4`).
+- Registers with the gateway through the portal SDK
+  (`github.com/go-tangra/go-tangra-portal/sdk/v4`), which fronts the browser API,
+  the public share route and the federated UI remote.
+- Enrolls for its workload identity with lcm (`github.com/go-tangra/go-tangra-lcm/sdk/v4`).
+
+## Modules in this repository
+
+| Module | Path | Consumers |
+|---|---|---|
+| `github.com/go-tangra/go-tangra-warden/v4` | `/` | the service (`cmd/wardensvc`) and `pkg/wardenmanifest` |
+| `github.com/go-tangra/go-tangra-warden/sdk/v4` | `sdk/` | other services: the `warden.v1` protobuf API (secret references resolved over mTLS) |
+
+The service builds against the in-repo SDK through
+`replace github.com/go-tangra/go-tangra-warden/sdk/v4 => ./sdk`. Consumers use the
+SDK's published `sdk/vX.Y.Z` tag.
+
+## Layout
+
+| Path | Purpose |
+|------|---------|
+| `cmd/wardensvc` | service binary (serve, `bootstrap`: migrate, vault probe, health; `version`) |
+| `internal/app` | wiring: config, platform, store, cache, vault, audit, HTTP/gRPC, gateway lease, permission seeding, reconciler, share sweeper |
+| `internal/authz` | Zanzibar evaluation (check, effective, accessible, grants) |
+| `internal/secrets`, `internal/folders` | secret and folder services (two-phase vault writes, versions, restore, search, TOTP, reconciliation) |
+| `internal/share` | external e-mail shares (hashed tokens, budgets, CIDR policy, sweeper, SMTP) |
+| `internal/transfer` | Bitwarden validate/import/export and tenant backups |
+| `internal/vault` | KV v2 client with AppRole login and token renewal, plus an in-memory fake |
+| `internal/...` | generator, statistics, audit vocabulary, rate counters, repository and SQL bindings (RLS, goose migrations) |
+| `pkg/wardenmanifest` | gateway manifest built from the OpenAPI document |
+| `ui` | Vue 3 + FlyonUI federated remote on `@go-tangra/ui` |
+| `api/openapi`, `api/schema`, `sdk/api/proto` | contracts (`warden.yaml`, Bitwarden schema, `warden.v1`) |
+| `deploy` | compose stack (TimescaleDB, Valkey, Vault dev, Mailpit), dev configuration, policy, `vault-init.sh` |
+| `tests/{contract,fuzz,integration,testdata}` | contract, fuzz and Docker-backed integration suites |
+
+## Build and test
+
+You need Go 1.26, Node 22, Docker (for integration tests and the image), and a
+GitHub token with `read:packages` to install `@go-tangra/ui` from GitHub Packages.
 
 ```bash
-# Export secrets to Bitwarden JSON format
-POST /v1/bitwarden/export
+go build ./... && go vet ./... && go test -race ./...
+(cd sdk && go vet ./... && go test -race ./...)
+(cd sdk && buf lint)
+make test-integration                     # -tags integration, needs Docker
+make lint cover fuzz redaction-scan vuln
 
-# Validate import before executing
-POST /v1/bitwarden/validate
-
-# Import from Bitwarden export
-POST /v1/bitwarden/import
-# Duplicate handling: SKIP, RENAME, or OVERWRITE
+cd ui
+export NODE_AUTH_TOKEN=$(gh auth token)   # ui/.npmrc only references this variable
+npm ci && npm run lint && npm run test:unit && npm run build
 ```
 
-## Build
+The unit coverage gate requires at least 80 % overall and 100 % for
+`internal/{authz,vault,share,secrets,generator}`. Generated code, SQL bindings
+and wiring are covered by the integration suite instead.
+
+The integration harness starts real auth and gateway processes. It still builds
+them from sibling checkouts (`../auth`, `../gateway`, as in the former monorepo
+layout); point it at released binaries or images before running it standalone.
+
+## Run locally
 
 ```bash
-make build-server       # Build binary
-make generate           # Generate Ent + Wire
-make docker             # Build Docker image
-make docker-buildx      # Multi-platform (amd64/arm64)
-make test               # Run tests
-make ent                # Regenerate Ent schemas
+make compose-up                           # TimescaleDB :5433, Valkey :6380, Vault dev :8200, Mailpit; runs deploy/vault-init.sh
+go run ./cmd/wardensvc bootstrap -config deploy/dev.yaml
+go run -tags ui ./cmd/wardensvc -config deploy/dev.yaml  # after the ui build
 ```
 
-## Docker
+The gateway must allow-list the module
+(`spiffe://example.org/svc/warden=/api/warden,/warden/share,/ui;warden`) and its
+edge must accept 16 MiB bodies for transfers (`limits.max_request_bytes: 16842752`).
+
+## Container image
+
+The image is `ghcr.io/go-tangra/go-tangra-warden`, built by `.github/workflows/ci.yaml`.
+It carries `wardensvc` with the embedded UI remote.
 
 ```bash
-docker run -p 9300:9300 ghcr.io/go-tangra/go-tangra-warden:latest
+docker buildx build --secret id=npm_token,env=NODE_AUTH_TOKEN \
+  --build-arg APP_VERSION=4.0.0 -t go-tangra-warden:dev .
+docker run --rm go-tangra-warden:dev version
 ```
 
-Runs as non-root user `warden` (UID 1000). Requires HashiCorp Vault and PostgreSQL/MySQL.
+The image runs `wardensvc -config deploy/dev.yaml` as user `app` (uid 10001).
+Deployments mount their own configuration and the Vault AppRole credentials
+(`vault.role_id_file` / `vault.secret_id_file`); `deploy/.vault` is never copied
+into the image.
 
-## Dependencies
+## Versioning
 
-- **Framework**: Kratos v2
-- **ORM**: Ent (PostgreSQL, MySQL)
-- **Secrets**: HashiCorp Vault API with AppRole auth
-- **Cache**: Redis
-- **Protobuf**: Buf
+- Service releases are tagged `vX.Y.Z`. CI publishes the image as `X.Y.Z`,
+  `X.Y`, `X` and `sha-<short>`. There is no `latest` tag.
+- The SDK is released separately with `sdk/vX.Y.Z` tags. These tags never build an image.
+- v4.0.0 rebuilds the service on the go-tangra v4 platform. The v3 line stays on
+  the `v3` branch and its `v3.x` tags.

@@ -1,0 +1,538 @@
+{
+ "encrypted": false,
+ "folders": [
+  {
+   "id": "bw-folder-0",
+   "name": "Imported/Team 0"
+  },
+  {
+   "id": "bw-folder-1",
+   "name": "Imported/Team 1"
+  },
+  {
+   "id": "bw-folder-2",
+   "name": "Imported/Team 2"
+  }
+ ],
+ "items": [
+  {
+   "favorite": true,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-0",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0000",
+    "totp": "JBSWY3DPEHPK3PXP",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc0.example.org"
+     }
+    ],
+    "username": "user0"
+   },
+   "name": "Service 000",
+   "notes": "Login for service 0",
+   "passwordHistory": [
+    {
+     "lastUsedDate": "2026-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-old-0000"
+    },
+    {
+     "lastUsedDate": "2025-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-older-0000"
+    }
+   ],
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-1",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0001",
+    "totp": "not a seed",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc1.example.org"
+     }
+    ],
+    "username": "user1"
+   },
+   "name": "Service 001",
+   "notes": "Login for service 1",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-2",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0002",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc2.example.org"
+     }
+    ],
+    "username": "user2"
+   },
+   "name": "Service 002",
+   "notes": "Login for service 2",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-3",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0003",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc3.example.org"
+     }
+    ],
+    "username": "user3"
+   },
+   "name": "Service 003",
+   "notes": "Login for service 3",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-4",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0004",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc4.example.org"
+     }
+    ],
+    "username": "user4"
+   },
+   "name": "Service 004",
+   "notes": "Login for service 4",
+   "passwordHistory": [
+    {
+     "lastUsedDate": "2026-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-old-0004"
+    },
+    {
+     "lastUsedDate": "2025-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-older-0004"
+    }
+   ],
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-5",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0005",
+    "totp": "JBSWY3DPEHPK3PXP",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc5.example.org"
+     }
+    ],
+    "username": "user5"
+   },
+   "name": "Service 005",
+   "notes": "Login for service 5",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-6",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0006",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc6.example.org"
+     }
+    ],
+    "username": "user6"
+   },
+   "name": "Service 006",
+   "notes": "Login for service 6",
+   "type": 1
+  },
+  {
+   "favorite": true,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-7",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0007",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc7.example.org"
+     }
+    ],
+    "username": "user7"
+   },
+   "name": "Service 007",
+   "notes": "Login for service 7",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-8",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0008",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc8.example.org"
+     }
+    ],
+    "username": "user8"
+   },
+   "name": "Service 008",
+   "notes": "Login for service 8",
+   "passwordHistory": [
+    {
+     "lastUsedDate": "2026-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-old-0008"
+    },
+    {
+     "lastUsedDate": "2025-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-older-0008"
+    }
+   ],
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-9",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0009",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc9.example.org"
+     }
+    ],
+    "username": "user9"
+   },
+   "name": "Service 009",
+   "notes": "Login for service 9",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-10",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0010",
+    "totp": "not a seed",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc10.example.org"
+     }
+    ],
+    "username": "user10"
+   },
+   "name": "Service 010",
+   "notes": "Login for service 10",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-11",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0011",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc11.example.org"
+     }
+    ],
+    "username": "user11"
+   },
+   "name": "Service 011",
+   "notes": "Login for service 11",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-12",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0012",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc12.example.org"
+     }
+    ],
+    "username": "user12"
+   },
+   "name": "Service 012",
+   "notes": "Login for service 12",
+   "passwordHistory": [
+    {
+     "lastUsedDate": "2026-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-old-0012"
+    },
+    {
+     "lastUsedDate": "2025-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-older-0012"
+    }
+   ],
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-13",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0013",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc13.example.org"
+     }
+    ],
+    "username": "user13"
+   },
+   "name": "Service 013",
+   "notes": "Login for service 13",
+   "type": 1
+  },
+  {
+   "favorite": true,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-14",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0014",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc14.example.org"
+     }
+    ],
+    "username": "user14"
+   },
+   "name": "Service 014",
+   "notes": "Login for service 14",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-15",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0015",
+    "totp": "JBSWY3DPEHPK3PXP",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc15.example.org"
+     }
+    ],
+    "username": "user15"
+   },
+   "name": "Service 015",
+   "notes": "Login for service 15",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-16",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0016",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc16.example.org"
+     }
+    ],
+    "username": "user16"
+   },
+   "name": "Service 016",
+   "notes": "Login for service 16",
+   "passwordHistory": [
+    {
+     "lastUsedDate": "2026-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-old-0016"
+    },
+    {
+     "lastUsedDate": "2025-01-01T00:00:00Z",
+     "password": "WARDEN-MARKER-PW-bw-older-0016"
+    }
+   ],
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-2",
+   "id": "bw-item-17",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0017",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc17.example.org"
+     }
+    ],
+    "username": "user17"
+   },
+   "name": "Service 017",
+   "notes": "Login for service 17",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "fields": [
+    {
+     "name": "env",
+     "type": 0,
+     "value": "prod"
+    },
+    {
+     "name": "owner",
+     "type": 0,
+     "value": "team"
+    }
+   ],
+   "folderId": "bw-folder-0",
+   "id": "bw-item-18",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0018",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc18.example.org"
+     }
+    ],
+    "username": "user18"
+   },
+   "name": "Service 018",
+   "notes": "Login for service 18",
+   "type": 1
+  },
+  {
+   "favorite": false,
+   "folderId": "bw-folder-1",
+   "id": "bw-item-19",
+   "login": {
+    "password": "WARDEN-MARKER-PW-bw-0019",
+    "totp": "not a seed",
+    "uris": [
+     {
+      "match": null,
+      "uri": "https://svc19.example.org"
+     }
+    ],
+    "username": "user19"
+   },
+   "name": "Service 019",
+   "notes": "Login for service 19",
+   "type": 1
+  },
+  {
+   "folderId": null,
+   "id": "bw-note",
+   "name": "A secure note",
+   "notes": "not a login",
+   "secureNote": {
+    "type": 0
+   },
+   "type": 2
+  },
+  {
+   "card": {
+    "number": "4111"
+   },
+   "folderId": null,
+   "id": "bw-card",
+   "name": "A card",
+   "type": 3
+  }
+ ]
+}
