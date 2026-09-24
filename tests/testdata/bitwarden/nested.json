@@ -1,0 +1,69 @@
+{
+ "encrypted": false,
+ "folders": [
+  {
+   "id": "d",
+   "name": "Level/Level/Level/Level/Level/Level/Level/Level/Level/Level/Level/Level/Leaf"
+  },
+  {
+   "id": "e",
+   "name": "  /Trim/  "
+  },
+  {
+   "id": "bad",
+   "name": "tab\there"
+  }
+ ],
+ "items": [
+  {
+   "folderId": "d",
+   "login": {
+    "password": "p",
+    "username": "u"
+   },
+   "name": "deep one",
+   "type": 1
+  },
+  {
+   "folderId": "e",
+   "login": {
+    "password": "p",
+    "username": "u"
+   },
+   "name": "trimmed",
+   "type": 1
+  },
+  {
+   "folderId": "bad",
+   "login": {
+    "password": "p"
+   },
+   "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "type": 1
+  },
+  {
+   "folderId": null,
+   "login": {
+    "username": "u"
+   },
+   "name": "no password",
+   "type": 1
+  },
+  {
+   "folderId": "zzz",
+   "login": {
+    "password": "p"
+   },
+   "name": "unknown folder",
+   "type": 1
+  },
+  {
+   "folderId": null,
+   "login": {
+    "password": "p"
+   },
+   "name": "bad/name",
+   "type": 1
+  }
+ ]
+}

@@ -1,97 +1,46 @@
-##################################
-# Stage 0: Build frontend module
-##################################
+# syntax=docker/dockerfile:1
+# Warden service image: builds the Vue remote, embeds it (-tags ui), and produces
+# a slim runtime carrying wardensvc. Build context is the repo root so the
+# module's replace directives (../.. and sibling services) resolve.
 
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS ui
+# The front-ends form one npm workspace (root package-lock.json) with the shared
+# kit at ui/kit; install the workspace, build the kit, then this front-end.
+WORKDIR /w
+COPY package.json package-lock.json .npmrc ./
+COPY ui/kit/package.json ui/kit/
+COPY services/gateway/shell/package.json services/gateway/shell/
+COPY services/auth/console/package.json services/auth/console/
+COPY services/asset/ui/package.json services/asset/ui/
+COPY services/inventory/ui/package.json services/inventory/ui/
+COPY services/ipam/ui/package.json services/ipam/ui/
+COPY services/paperless/ui/package.json services/paperless/ui/
+COPY services/deployer/ui/package.json services/deployer/ui/
+COPY services/lcm/ui/package.json services/lcm/ui/
+COPY services/notification/ui/package.json services/notification/ui/
+COPY services/warden/ui/package.json services/warden/ui/
+COPY services/ticket/ui/package.json services/ticket/ui/
+COPY services/dns/ui/package.json services/dns/ui/
+RUN npm ci --no-audit --no-fund
+COPY ui/ ./ui/
+RUN npm run -w ui/kit build
+COPY services/warden/ui/ ./services/warden/ui/
+RUN npm run -w services/warden/ui build
 
-RUN npm install -g pnpm@9
-
-WORKDIR /frontend
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install
-COPY frontend/ .
-RUN pnpm build
-
-##################################
-# Stage 1: Build Go executable
-##################################
-
-FROM golang:1.25-alpine AS builder
-
-ARG APP_VERSION=1.0.0
-
-# Enable toolchain auto-download for newer Go versions
-ENV GOTOOLCHAIN=auto
-
-# Install build dependencies
-RUN apk add --no-cache git make curl
-
-# Install buf for proto descriptor generation
-RUN curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf && \
-    chmod +x /usr/local/bin/buf
-
-# Set working directory
+FROM golang:1.26-alpine AS build
+RUN apk add --no-cache git ca-certificates
 WORKDIR /src
-
-# Copy go mod files first for better caching
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy the entire source code
 COPY . .
-
-# Regenerate proto descriptor (ensures embedded descriptor.bin is always up to date)
-RUN buf build -o cmd/server/assets/descriptor.bin
-
-# Copy frontend dist into assets for go:embed
-COPY --from=frontend-builder /frontend/dist cmd/server/assets/frontend-dist/
-
-# Build the server
-RUN CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64 \
-    go build -ldflags "-X main.version=${APP_VERSION} -s -w" \
-    -o /src/bin/warden-server \
-    ./cmd/server
-
-##################################
-# Stage 2: Create runtime image
-##################################
+COPY --from=ui /w/services/warden/ui/dist ./services/warden/ui/dist
+WORKDIR /src/services/warden
+ENV CGO_ENABLED=0 GOFLAGS=-buildvcs=false
+RUN go build -tags "ui" -o /out/wardensvc ./cmd/wardensvc
 
 FROM alpine:3.20
-
-ARG APP_VERSION=1.0.0
-
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
-
-# Set timezone
-ENV TZ=UTC
-
-# Set working directory
+RUN apk add --no-cache ca-certificates postgresql-client && adduser -D -u 10001 app
+COPY --from=build /out/wardensvc /usr/local/bin/
+COPY services/warden/deploy /app/deploy
 WORKDIR /app
-
-# Copy executable from builder
-COPY --from=builder /src/bin/warden-server /app/bin/warden-server
-
-# Copy configuration files
-COPY --from=builder /src/configs/ /app/configs/
-
-# Create non-root user
-RUN addgroup -g 1000 warden && \
-    adduser -D -u 1000 -G warden warden && \
-    mkdir -p /app/certs && chown -R warden:warden /app
-
-# Switch to non-root user
-USER warden:warden
-
-# Expose gRPC and HTTP ports
-EXPOSE 9300 9301
-
-# Set default command
-CMD ["/app/bin/warden-server", "-c", "/app/configs"]
-
-# Labels
-LABEL org.opencontainers.image.title="Warden Service" \
-      org.opencontainers.image.description="Secret Management Service with HashiCorp Vault" \
-      org.opencontainers.image.version="${APP_VERSION}"
+USER app
+ENTRYPOINT ["wardensvc"]
+CMD ["-config", "deploy/dev.yaml"]

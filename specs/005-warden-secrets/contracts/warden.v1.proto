@@ -1,0 +1,22 @@
+syntax = "proto3";
+package warden.v1;
+option go_package = "github.com/go-freya/freya/services/warden/api/proto/warden/v1;wardenv1";
+
+// Secrets is the service-to-service surface (Freya channel, platform token
+// verified with authclient; the gateway relays it for gRPC ingress). Every
+// call is subject to the same Zanzibar check as the browser API.
+service Secrets {
+  rpc Get(GetRequest) returns (GetResponse);                     // metadata only
+  rpc GetPassword(GetPasswordRequest) returns (GetPasswordResponse); // material; audited
+  rpc Check(CheckRequest) returns (CheckResponse);
+}
+message GetRequest { string id = 1; }
+message Secret {
+  string id = 1; string folder_id = 2; string folder_path = 3; string name = 4; string username = 5;
+  string host_url = 6; string description = 7; int32 current_version = 8; bool has_totp = 9;
+}
+message GetResponse { Secret secret = 1; }
+message GetPasswordRequest { string id = 1; int32 version = 2; } // 0 = current
+message GetPasswordResponse { string password = 1; int32 version = 2; }
+message CheckRequest { string resource_type = 1; string resource_id = 2; string permission = 3; } // read|write|delete|share
+message CheckResponse { bool allowed = 1; string relation = 2; }
