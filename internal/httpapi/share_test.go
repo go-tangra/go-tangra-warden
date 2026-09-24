@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/cache"
-	"github.com/go-freya/freya/services/warden/internal/share"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/cache"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
 )
 
 type mailbox struct{ sent []share.Message }

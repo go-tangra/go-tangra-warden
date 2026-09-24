@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-freya/freya/services/warden/internal/store"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // Error is a refusal with a stable reason from the OpenAPI closed vocabulary.

@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/audit"
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/folders"
-	"github.com/go-freya/freya/services/warden/internal/memstore"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/folders"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/memstore"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // Querier reads the audit hypertable (database or in-memory).

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/memstore"
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/memstore"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 func TestGrantRevokeList(t *testing.T) {

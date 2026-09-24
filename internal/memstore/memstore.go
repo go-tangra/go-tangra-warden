@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/repo"
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/repo"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // Store holds every table; exported maps ease assertions in tests.

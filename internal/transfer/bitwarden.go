@@ -10,11 +10,11 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/go-freya/freya/services/warden/internal/audit"
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/folders"
-	"github.com/go-freya/freya/services/warden/internal/repo"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/folders"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/repo"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
 )
 
 // Bitwarden document shapes (api/schema/bitwarden.schema.json).

@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 var shareLinkRE = regexp.MustCompile(`https://\S+/warden/share#([A-Za-z0-9_-]{43})`)

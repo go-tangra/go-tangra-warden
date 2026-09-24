@@ -3,7 +3,7 @@ package fuzz
 import (
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/share"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
 )
 
 // FuzzShareToken: only 43-character base64url strings are tokens; hashing is

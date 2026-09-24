@@ -3,7 +3,7 @@ package fuzz
 import (
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/generator"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/generator"
 )
 
 // FuzzGenerator: options never panic and every accepted request is satisfied.

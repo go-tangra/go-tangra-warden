@@ -10,9 +10,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/go-freya/freya/services/warden/internal/folders"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/folders"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 func FuzzFolderName(f *testing.F) {

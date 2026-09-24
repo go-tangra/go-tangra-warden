@@ -12,9 +12,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-freya/freya/services/warden/internal/app"
-	"github.com/go-freya/freya/services/warden/internal/config"
-	"github.com/go-freya/freya/services/warden/ui"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/app"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/config"
+	"github.com/go-tangra/go-tangra-warden/v4/ui"
 )
 
 func main() {

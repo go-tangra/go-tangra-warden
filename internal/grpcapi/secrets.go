@@ -12,11 +12,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/go-freya/freya/services/auth/pkg/authclient"
-	wardenv1 "github.com/go-freya/freya/services/warden/api/proto/warden/v1"
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
+	wardenv1 "github.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // SecretsServer implements warden.v1.Secrets.

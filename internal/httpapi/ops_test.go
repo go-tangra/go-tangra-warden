@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/generator"
-	"github.com/go-freya/freya/services/warden/internal/stats"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/generator"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/stats"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 func TestOpsRoutes(t *testing.T) {

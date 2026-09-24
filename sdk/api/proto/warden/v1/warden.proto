@@ -1,6 +1,6 @@
 syntax = "proto3";
 package warden.v1;
-option go_package = "github.com/go-freya/freya/services/warden/api/proto/warden/v1;wardenv1";
+option go_package = "github.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1;wardenv1";
 
 // Secrets is the service-to-service surface (Freya channel, platform token
 // verified with authclient; the gateway relays it for gRPC ingress). Every

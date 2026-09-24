@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-freya/freya/services/warden/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
 )
 
 // RegisterSecrets mounts the secret routes (contracts §secrets).

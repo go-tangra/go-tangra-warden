@@ -9,10 +9,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-freya/freya/services/auth/pkg/authclient"
-	"github.com/go-freya/freya/services/warden/internal/app"
-	"github.com/go-freya/freya/services/warden/internal/config"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/app"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/config"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // bootstrap prepares a deployment: migrations, a vault access check (AppRole

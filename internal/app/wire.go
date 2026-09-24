@@ -3,18 +3,18 @@ package app
 import (
 	"time"
 
-	"github.com/go-freya/freya/services/auth/pkg/authclient"
-	wardenv1 "github.com/go-freya/freya/services/warden/api/proto/warden/v1"
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/folders"
-	"github.com/go-freya/freya/services/warden/internal/generator"
-	"github.com/go-freya/freya/services/warden/internal/grpcapi"
-	"github.com/go-freya/freya/services/warden/internal/httpapi"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
-	"github.com/go-freya/freya/services/warden/internal/share"
-	"github.com/go-freya/freya/services/warden/internal/stats"
-	"github.com/go-freya/freya/services/warden/internal/transfer"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
+	wardenv1 "github.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/folders"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/generator"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/grpcapi"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/httpapi"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/stats"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/transfer"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // Version is reported by the health route.

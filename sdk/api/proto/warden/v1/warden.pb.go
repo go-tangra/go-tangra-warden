@@ -473,7 +473,7 @@ const file_warden_v1_warden_proto_rawDesc = "" +
 	"\aSecrets\x124\n" +
 	"\x03Get\x12\x15.warden.v1.GetRequest\x1a\x16.warden.v1.GetResponse\x12L\n" +
 	"\vGetPassword\x12\x1d.warden.v1.GetPasswordRequest\x1a\x1e.warden.v1.GetPasswordResponse\x12:\n" +
-	"\x05Check\x12\x17.warden.v1.CheckRequest\x1a\x18.warden.v1.CheckResponseBHZFgithub.com/go-freya/freya/services/warden/api/proto/warden/v1;wardenv1b\x06proto3"
+	"\x05Check\x12\x17.warden.v1.CheckRequest\x1a\x18.warden.v1.CheckResponseBKZIgithub.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1;wardenv1b\x06proto3"
 
 var (
 	file_warden_v1_warden_proto_rawDescOnce sync.Once

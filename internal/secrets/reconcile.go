@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/audit"
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // ReconcileGrace is how long a fresh row may sit at version 0 before the

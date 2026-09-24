@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/memstore"
-	"github.com/go-freya/freya/services/warden/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/memstore"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 const tA = "0190f7c2-6a3e-7c1a-9b2e-2f6f9d1b4c55"

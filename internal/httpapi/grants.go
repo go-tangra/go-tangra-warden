@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
 )
 
 // RegisterGrants mounts the grant and access routes (contracts §permissions).

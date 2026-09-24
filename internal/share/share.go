@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/audit"
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/store"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // Bounds (contracts/warden-api.openapi.yaml).

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	authv1 "github.com/go-freya/freya/services/auth/api/proto/auth/v1"
-	"github.com/go-freya/freya/services/warden/pkg/wardenmanifest"
+	authv1 "github.com/go-tangra/go-tangra-auth/sdk/v4/api/proto/auth/v1"
+	"github.com/go-tangra/go-tangra-warden/v4/pkg/wardenmanifest"
 )
 
 // SeedPermissions registers the module's permissions with the auth service

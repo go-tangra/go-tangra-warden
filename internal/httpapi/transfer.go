@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-freya/freya/services/warden/internal/transfer"
-	"github.com/go-freya/freya/services/warden/internal/vault"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/transfer"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
 // TransferDeps are the services behind the transfer and backup routes.

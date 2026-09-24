@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/transfer"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/transfer"
 )
 
 func seedFiles(f *testing.F) {

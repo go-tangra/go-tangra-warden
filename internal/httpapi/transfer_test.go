@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/services/warden/internal/transfer"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/transfer"
 )
 
 func fixture(t *testing.T, name string) string {

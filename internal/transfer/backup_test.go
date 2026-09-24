@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/services/warden/internal/authz"
-	"github.com/go-freya/freya/services/warden/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
 )
 
 const tB = "0190f7c2-6a3e-7c1a-9b2e-2f6f9d1b4c66"

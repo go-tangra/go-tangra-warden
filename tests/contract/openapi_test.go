@@ -3,10 +3,10 @@ package contract
 import (
 	"testing"
 
-	"github.com/go-freya/freya/internal/testrt"
-	"github.com/go-freya/freya/internal/testutil"
-	"github.com/go-freya/freya/services/warden/internal/httpapi"
-	"github.com/go-freya/freya/services/warden/pkg/wardenmanifest"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/httpapi"
+	"github.com/go-tangra/go-tangra-warden/v4/pkg/wardenmanifest"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testrt"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
 )
 
 // TestOpenAPIDocument proves the contract parses, every operation has an id,

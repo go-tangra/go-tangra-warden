@@ -5,8 +5,8 @@ import (
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	wardenv1 "github.com/go-freya/freya/services/warden/api/proto/warden/v1"
-	"github.com/go-freya/freya/services/warden/pkg/wardenmanifest"
+	wardenv1 "github.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1"
+	"github.com/go-tangra/go-tangra-warden/v4/pkg/wardenmanifest"
 )
 
 // TestGRPCSurface proves the generated service matches contracts/warden.v1.proto
