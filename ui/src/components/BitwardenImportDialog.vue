@@ -3,8 +3,8 @@
 // document is shape-checked by a Zod schema before any request; nothing is
 // written until the operator confirms.
 import { computed, ref, watch } from 'vue'
-import { UiAlert, UiButton, UiForm, UiFilePicker, UiSelect, UiKeyValueTable, UiDrawer, type SelectOption } from '@freya/ui'
-import { useZodForm } from '@freya/ui/forms'
+import { UiAlert, UiButton, UiForm, UiFilePicker, UiSelect, UiKeyValueTable, UiDrawer, type SelectOption } from '@go-tangra/ui'
+import { useZodForm } from '@go-tangra/ui/forms'
 
 import { readFile } from '@/api/download'
 import { useFolders } from '@/stores/folders'

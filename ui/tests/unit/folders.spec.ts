@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import SecretsView from '@/views/secrets/index.vue'
 import { useFolders } from '@/stores/folders'
 import { click, folder, mountInLayout, node, stubFetch, type, viewer } from './helpers'
-import { useToast } from '@freya/ui'
+import { useToast } from '@go-tangra/ui'
 
 const infra = folder('f1', 'Infra', '/Infra')
 const db = folder('f2', 'Databases', '/Infra/Databases', 'f1')

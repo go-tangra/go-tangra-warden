@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { optionalString } from '@freya/ui/forms'
+import { optionalString } from '@go-tangra/ui/forms'
 
 export const IMPORT_STRATEGIES = ['skip', 'rename', 'overwrite'] as const
 export const MAX_IMPORT_BYTES = 16 * 1024 * 1024

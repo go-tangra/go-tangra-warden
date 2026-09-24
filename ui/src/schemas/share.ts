@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { email, optionalString, cidr } from '@freya/ui/forms'
+import { email, optionalString, cidr } from '@go-tangra/ui/forms'
 
 export const SHARE_VALIDITY = { '1h': 3600, '1d': 86400, '7d': 604800 } as const
 

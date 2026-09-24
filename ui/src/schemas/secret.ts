@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { nonEmpty, optionalString, jsonObject } from '@freya/ui/forms'
+import { nonEmpty, optionalString, jsonObject } from '@go-tangra/ui/forms'
 
 /** otpauth:// URI or a base32 seed (the service normalises either). */
 export const totpSeed = z.string().trim().max(2048).regex(/^(otpauth:\/\/totp\/.+|[A-Z2-7]+=*)$/i, 'Paste an otpauth:// URI or a base32 seed.')

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { UiPage, UiCard, UiForm, UiNumberInput, UiCheckbox, UiSelect, UiButton, UiSecretField, UiCopyButton, type SelectOption } from '@freya/ui'
-import { useZodForm } from '@freya/ui/forms'
+import { UiPage, UiCard, UiForm, UiNumberInput, UiCheckbox, UiSelect, UiButton, UiSecretField, UiCopyButton, type SelectOption } from '@go-tangra/ui'
+import { useZodForm } from '@go-tangra/ui/forms'
 import { generateLocal, useOps } from '@/stores/ops'
 import { generatorSchema } from '@/schemas'
 

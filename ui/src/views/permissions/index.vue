@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { UiPage, UiCard, UiTree, UiDataTable, UiButton, UiIcon, UiPermissionDrawer, usePermissionGrants, type Column, type TreeNode } from '@freya/ui'
+import { UiPage, UiCard, UiTree, UiDataTable, UiButton, UiIcon, UiPermissionDrawer, usePermissionGrants, type Column, type TreeNode } from '@go-tangra/ui'
 import { useFolders } from '@/stores/folders'
 import { useSecrets } from '@/stores/secrets'
 import { useDirectory } from '@/stores/directory'

@@ -2,8 +2,8 @@
 // Version history of one secret with per-version reveal and restore.
 // Module-unique (vault versioning), built on kit primitives.
 import { ref, watch } from 'vue'
-import { UiDrawer, UiAlert, UiButton, UiBadge, UiForm, UiInput, UiDialog, UiEmptyState } from '@freya/ui'
-import { useZodForm } from '@freya/ui/forms'
+import { UiDrawer, UiAlert, UiButton, UiBadge, UiForm, UiInput, UiDialog, UiEmptyState } from '@go-tangra/ui'
+import { useZodForm } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import type { Secret, SecretVersion } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'

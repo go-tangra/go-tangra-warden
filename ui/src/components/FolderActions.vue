@@ -4,8 +4,8 @@
 // Module-unique (folder tree semantics of the vault), built on kit primitives.
 import { computed, ref } from 'vue'
 import { useAbility } from '@casl/vue'
-import { UiButton, UiDialog, UiForm, UiInput, UiSelect, UiCheckbox, UiDrawer, type SelectOption } from '@freya/ui'
-import { useZodForm } from '@freya/ui/forms'
+import { UiButton, UiDialog, UiForm, UiInput, UiSelect, UiCheckbox, UiDrawer, type SelectOption } from '@go-tangra/ui'
+import { useZodForm } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import { useFolders } from '@/stores/folders'
 import { folderNameSchema, folderMoveSchema, folderDeleteSchema } from '@/schemas'

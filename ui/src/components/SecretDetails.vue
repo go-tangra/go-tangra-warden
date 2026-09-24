@@ -3,8 +3,8 @@
 // (audited, never persisted), rotate it, one-time codes and email shares.
 // Module-unique; rendered under the kit's record form in the secret drawer.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { UiAlert, UiButton, UiSecretField, UiCopyButton, UiForm, UiInput, UiTextarea, UiSelect, UiNumberInput, UiSection, UiDataTable, UiStatusChip, UiDrawer, useConfirm, type Column, type SelectOption } from '@freya/ui'
-import { useZodForm } from '@freya/ui/forms'
+import { UiAlert, UiButton, UiSecretField, UiCopyButton, UiForm, UiInput, UiTextarea, UiSelect, UiNumberInput, UiSection, UiDataTable, UiStatusChip, UiDrawer, useConfirm, type Column, type SelectOption } from '@go-tangra/ui'
+import { useZodForm } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import type { Secret } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'

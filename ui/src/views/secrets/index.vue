@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAbility } from '@casl/vue'
-import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, type Column, type MenuItem, type TreeNode } from '@freya/ui'
-import { useZodForm, zodToFields } from '@freya/ui/forms'
+import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
+import { useZodForm, zodToFields } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import type { Folder, FolderNode, Secret } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'
