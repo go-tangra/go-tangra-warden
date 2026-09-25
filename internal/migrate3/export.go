@@ -191,7 +191,9 @@ func Export(ctx context.Context, src Source, kv KV, o ExportOptions) (*Bundle, E
 		}
 		out.Versions = history
 		if s.HasTOTP {
-			data, err := kv.Read(ctx, s.VaultPath+"/totp", 0)
+			// v3 keys TOTP by the secret id (BuildTotpPath), not by the
+			// password's storage path: vault_path holds a separate id.
+			data, err := kv.Read(ctx, fmt.Sprintf("warden/%d/%s/totp", o.Tenant, s.ID), 0)
 			if err != nil && !errors.Is(err, ErrNoKV) {
 				return nil, sum, fmt.Errorf("migrate3: vault: TOTP of %s: %w", label, err)
 			}
