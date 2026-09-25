@@ -257,7 +257,7 @@ func TestRunExportAndImport(t *testing.T) {
 	imp := &fakeImporter{}
 	cfg := ImportConfig{In: out, KeyFile: key, UsersFile: users, TenantID: v4Tenant, RoleMap: "platform:admin=admin", ActorEmail: "bob@example.org", DryRun: true}
 	res, err := RunImport(context.Background(), cfg, imp, nil)
-	if err != nil || !imp.opts.DryRun || imp.got.ActorID != uOps || len(imp.got.Secrets) != 3 || res.Mapping.UnmappedRoles != nil && len(res.Mapping.UnmappedRoles) != 0 {
+	if err != nil || !imp.opts.DryRun || imp.got.ActorID != uOps || len(imp.got.Secrets) != 3 || len(res.Mapping.UnmappedRoles) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if res.Failed() {

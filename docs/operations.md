@@ -48,6 +48,8 @@
   remaps every id, recreates folders in path order, writes material to the
   vault in version order or records `material_missing`, keeps grants and
   reports counts and warnings per entity.
+- Moving a warden v3 tenant into v4 (one-off, `wardensvc export-v3` /
+  `import-v3`): see [migration-v3.md](migration-v3.md).
 - Database backups alone are useless without the vault: the two must be
   restored together, or a warden backup with material used instead.
 
