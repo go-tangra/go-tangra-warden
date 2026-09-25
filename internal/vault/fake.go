@@ -46,6 +46,25 @@ func (f *Fake) PutPassword(_ context.Context, tenantID, secretID, password strin
 	return len(f.passwords[p]), nil
 }
 
+// SkipVersion consumes a version number without material (see Client.SkipVersion).
+func (f *Fake) SkipVersion(_ context.Context, tenantID, secretID string) (int, error) {
+	p, err := Path(tenantID, secretID)
+	if err != nil {
+		return 0, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.gate(); err != nil {
+		return 0, err
+	}
+	f.writes++
+	if f.FailAfter > 0 && f.writes >= f.FailAfter {
+		return 0, ErrUnavailable
+	}
+	f.passwords[p] = append(f.passwords[p], "")
+	return len(f.passwords[p]), nil
+}
+
 func (f *Fake) GetPassword(_ context.Context, tenantID, secretID string, version int) (string, error) {
 	p, err := Path(tenantID, secretID)
 	if err != nil {

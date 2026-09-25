@@ -261,3 +261,84 @@ func errString(err error) string {
 	}
 	return err.Error()
 }
+
+// TestInsertKeepsGivenTimestamps: a migration passes the original times and
+// authors; zero values still mean now() and the creator.
+func TestInsertKeepsGivenTimestamps(t *testing.T) {
+	adminDSN, appDSN := startDB(t)
+	ctx := context.Background()
+	if err := Migrate(ctx, adminDSN); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(ctx, appDSN, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	created := time.Date(2021, 3, 4, 5, 6, 7, 0, time.UTC)
+	updated := created.Add(48 * time.Hour)
+	by, other := uA, "0190f7c2-6a3e-7c1a-9b2e-2f6f9d1b4c88"
+	f1, f2, s1, s2 := NewID(), NewID(), NewID(), NewID()
+	var gOld, gNow Grant
+	err = st.Tx(ctx, Scope{TenantID: tA}, func(tx pgx.Tx) error {
+		if err := InsertFolder(ctx, tx, Folder{ID: f1, TenantID: tA, Name: "Old", Path: "/Old", CreatedBy: &by, UpdatedBy: &other, CreatedAt: created, UpdatedAt: updated}); err != nil {
+			return err
+		}
+		if err := InsertFolder(ctx, tx, Folder{ID: f2, TenantID: tA, Name: "New", Path: "/New", CreatedBy: &by}); err != nil {
+			return err
+		}
+		if err := InsertSecret(ctx, tx, Secret{ID: s1, TenantID: tA, FolderID: &f1, Name: "old", VaultPath: "p1", CurrentVersion: 3, HasTOTP: true, CreatedBy: &by, UpdatedBy: &other, CreatedAt: created, UpdatedAt: updated}); err != nil {
+			return err
+		}
+		if err := InsertSecret(ctx, tx, Secret{ID: s2, TenantID: tA, Name: "created-only", VaultPath: "p2", CreatedBy: &by, CreatedAt: created}); err != nil {
+			return err
+		}
+		if err := InsertVersion(ctx, tx, SecretVersion{SecretID: s1, TenantID: tA, Version: 3, Checksum: "c", Source: "migration-v3", CreatedBy: &other, CreatedAt: updated}); err != nil {
+			return err
+		}
+		if err := InsertVersion(ctx, tx, SecretVersion{SecretID: s1, TenantID: tA, Version: 4, Checksum: "c", Source: "api", CreatedBy: &by}); err != nil {
+			return err
+		}
+		if gOld, err = UpsertGrant(ctx, tx, Grant{ID: NewID(), TenantID: tA, ResourceType: "folder", ResourceID: f1, SubjectType: "user", SubjectID: other, Relation: "viewer", GrantedBy: &by, GrantedAt: created}); err != nil {
+			return err
+		}
+		gNow, err = UpsertGrant(ctx, tx, Grant{ID: NewID(), TenantID: tA, ResourceType: "folder", ResourceID: f2, SubjectType: "tenant", Relation: "viewer", GrantedBy: &by})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recent := func(ts time.Time) bool { return time.Since(ts) < time.Minute }
+	_ = st.Tx(ctx, Scope{TenantID: tA}, func(tx pgx.Tx) error {
+		old, _ := GetFolder(ctx, tx, tA, f1)
+		if !old.CreatedAt.Equal(created) || !old.UpdatedAt.Equal(updated) || *old.CreatedBy != by || *old.UpdatedBy != other {
+			t.Errorf("folder %+v", old)
+		}
+		nw, _ := GetFolder(ctx, tx, tA, f2)
+		if !recent(nw.CreatedAt) || !recent(nw.UpdatedAt) || *nw.UpdatedBy != by {
+			t.Errorf("folder defaults %+v", nw)
+		}
+		s, _ := GetSecret(ctx, tx, tA, s1)
+		if !s.CreatedAt.Equal(created) || !s.UpdatedAt.Equal(updated) || *s.UpdatedBy != other || s.CurrentVersion != 3 || !s.HasTOTP {
+			t.Errorf("secret %+v", s)
+		}
+		c, _ := GetSecret(ctx, tx, tA, s2)
+		if !c.CreatedAt.Equal(created) || !c.UpdatedAt.Equal(created) || *c.UpdatedBy != by {
+			t.Errorf("secret updated defaults to created: %+v", c)
+		}
+		v3, _ := GetVersion(ctx, tx, tA, s1, 3)
+		v4, _ := GetVersion(ctx, tx, tA, s1, 4)
+		if !v3.CreatedAt.Equal(updated) || *v3.CreatedBy != other || !recent(v4.CreatedAt) {
+			t.Errorf("versions %+v %+v", v3, v4)
+		}
+		if !gOld.GrantedAt.Equal(created) || !recent(gNow.GrantedAt) {
+			t.Errorf("grants %v %v", gOld.GrantedAt, gNow.GrantedAt)
+		}
+		// Re-granting without a time refreshes granted_at as before.
+		g, err := UpsertGrant(ctx, tx, Grant{ID: NewID(), TenantID: tA, ResourceType: "folder", ResourceID: f1, SubjectType: "user", SubjectID: other, Relation: "editor", GrantedBy: &by})
+		if err != nil || g.ID != gOld.ID || !recent(g.GrantedAt) {
+			t.Errorf("regrant %+v %v", g, err)
+		}
+		return nil
+	})
+}
