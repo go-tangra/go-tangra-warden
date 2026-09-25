@@ -1,7 +1,8 @@
 // Command wardensvc runs the warden module (default) or prepares a
 // deployment: `wardensvc bootstrap -config deploy/dev.yaml` applies the
 // migrations, checks the vault (AppRole login, KV mount) and prints the
-// dependency health.
+// dependency health. `wardensvc export-v3` / `import-v3` move a warden v3
+// tenant into v4 (docs/migration-v3.md).
 package main
 
 import (
@@ -18,8 +19,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "bootstrap" {
-		os.Exit(bootstrap(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "bootstrap":
+			os.Exit(bootstrap(os.Args[2:]))
+		case "export-v3":
+			os.Exit(exportV3(os.Args[2:]))
+		case "import-v3":
+			os.Exit(importV3(os.Args[2:]))
+		}
 	}
 	os.Exit(run(os.Args[1:]))
 }
