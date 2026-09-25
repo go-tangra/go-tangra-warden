@@ -45,7 +45,7 @@ type Options struct {
 	Verifier httpapi.Verifier       // nil = authclient against the auth service
 	GRPCAuth kmiddleware.Middleware // gRPC user middleware when Verifier is not an authclient.Verifier (tests)
 	Remote   fs.FS                  // nil = no federated remote
-	Mail     share.Sender           // nil = SMTP/log sender from config
+	Mail     share.Sender           // nil = notification (or dev log) sender from config
 	Freya    []freya.Option
 	Migrate  bool
 	// Register lets the caller mount handlers after the core is wired (the

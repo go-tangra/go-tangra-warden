@@ -79,11 +79,11 @@ func (f *fx) events(t string) []store.AuditRow { f.aw.Flush(); return f.ms.Audit
 
 func linkToken(t *testing.T, m Message) string {
 	t.Helper()
-	i := strings.Index(m.Text, "/warden/share#")
+	i := strings.Index(m.Vars["link"], "/warden/share#")
 	if i < 0 {
-		t.Fatalf("no link in %q", m.Text)
+		t.Fatalf("no link in %q", m.Vars)
 	}
-	return strings.Fields(m.Text[i+len("/warden/share#"):])[0]
+	return m.Vars["link"][i+len("/warden/share#"):]
 }
 
 func TestTokens(t *testing.T) {
@@ -133,13 +133,32 @@ func TestCreate(t *testing.T) {
 	if err != nil || v.MaxOpens != 1 || v.State != "active" || v.ExpiresAt != f.now.Add(time.Hour) || v.RecipientEmail != "bob@x.test" {
 		t.Fatalf("%+v %v", v, err)
 	}
-	// The mail carries the link with a valid token; the database holds only the hash; the audit never has the token.
-	if len(f.mail.sent) != 1 || f.mail.sent[0].To != "bob@x.test" || !strings.Contains(f.mail.sent[0].Text, "prod-db") || !strings.Contains(f.mail.sent[0].Text, "for the migration") {
+	// The mail is the warden.share system template for the share's tenant,
+	// correlated with the share; the link is a variable (secret on the
+	// notification side), the database holds only the hash and the audit
+	// never has the token.
+	if len(f.mail.sent) != 1 {
 		t.Fatalf("%+v", f.mail.sent)
 	}
-	tok := linkToken(t, f.mail.sent[0])
-	if !ValidToken(tok) || !strings.Contains(f.mail.sent[0].Text, "https://platform.example.org/warden/share#"+tok) {
-		t.Fatalf("link %q", f.mail.sent[0].Text)
+	m := f.mail.sent[0]
+	if m.To != "bob@x.test" || m.Template != TemplateShare || TemplateShare != "warden.share" || m.TenantID != tA || m.CorrelationID != v.ID {
+		t.Fatalf("%+v", m)
+	}
+	tok := linkToken(t, m)
+	want := map[string]string{
+		"link":        "https://platform.example.org/warden/share#" + tok,
+		"secret_name": "prod-db",
+		"expires":     f.now.Add(time.Hour).UTC().Format(time.RFC1123),
+		"openings":    "1",
+		"message":     "for the migration",
+	}
+	if !ValidToken(tok) || len(m.Vars) != len(want) {
+		t.Fatalf("vars %q", m.Vars)
+	}
+	for k, val := range want {
+		if m.Vars[k] != val {
+			t.Errorf("var %s = %q, want %q", k, m.Vars[k], val)
+		}
 	}
 	row := f.ms.Shares[v.ID]
 	if row.TokenHash != Hash(tok) || strings.Contains(row.TokenHash, tok) {
@@ -160,8 +179,13 @@ func TestCreate(t *testing.T) {
 	if v3.MaxOpens != 3 || v3.ExpiresAt != f.now.Add(2*time.Hour) {
 		t.Fatalf("%+v", v3)
 	}
-	// Mail failure cancels the share and reports it.
-	f.mail.err = errors.New("smtp down")
+	// Without a message the optional variable is omitted; openings follow the share.
+	last := f.mail.sent[len(f.mail.sent)-1]
+	if _, ok := last.Vars["message"]; ok || last.Vars["openings"] != "3" || last.CorrelationID != v3.ID || !strings.HasPrefix(last.Vars["link"], "https://p/warden/share#") {
+		t.Fatalf("vars without message: %q", last.Vars)
+	}
+	// Mail failure (notification unavailable, retryable or permanent) cancels the share and reports it.
+	f.mail.err = errors.New("notification unavailable")
 	if _, err := f.svc.Create(ctx, alice, f.sid, Input{RecipientEmail: "e@x.test"}); !errors.Is(err, ErrMail) {
 		t.Fatalf("mail: %v", err)
 	}
@@ -170,6 +194,15 @@ func TestCreate(t *testing.T) {
 		if sh.RecipientEmail == "e@x.test" && sh.State != "cancelled" {
 			t.Fatal("share kept after mail failure")
 		}
+	}
+	failed := 0
+	for _, e := range f.events("share_created") {
+		if e.Outcome == "failed" && e.Reason == "mail_failed" {
+			failed++
+		}
+	}
+	if failed != 1 {
+		t.Fatalf("mail failure audited %d times", failed)
 	}
 	// Store and random failures.
 	f.ms.FailOn("InsertShare", errors.New("db"))
@@ -379,33 +412,19 @@ func TestCancelListSweep(t *testing.T) {
 	f.ms.FailOn("ExpireShares", nil)
 }
 
-func TestMailSenders(t *testing.T) {
-	if _, err := NewSMTP(SMTPConfig{}); err == nil {
-		t.Fatal("empty config")
-	}
-	if _, err := NewSMTP(SMTPConfig{Host: "h", Port: 25, From: "a@b"}); err == nil {
-		t.Fatal("plaintext port refused")
-	}
-	s, err := NewSMTP(SMTPConfig{Host: "127.0.0.1", Port: 1, From: "a@b", AllowPlaintext: true, Username: "u", Password: "p"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Send(context.Background(), Message{To: "x@y", Subject: "s\r\nX: injected", Text: "t"}); err == nil {
-		t.Fatal("closed port")
-	}
+func TestLogSink(t *testing.T) {
 	var buf bytes.Buffer
 	sink := LogSink{Log: slog.New(slog.NewTextHandler(&buf, nil))}
-	if err := sink.Send(context.Background(), Message{To: "x@y", Subject: "s", Text: "https://p/warden/share#" + strings.Repeat("t", 43)}); err != nil {
+	link := "https://p/warden/share#" + strings.Repeat("t", 43)
+	if err := sink.Send(context.Background(), Message{To: "x@y", Template: TemplateShare, Vars: map[string]string{"link": link, "secret_name": "prod-db"}}); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(buf.String(), "warden/share") || !strings.Contains(buf.String(), "x@y") {
-		t.Fatalf("sink logged the link: %s", buf.String())
+	// Recipient and template only: never the link nor any other variable.
+	if strings.Contains(buf.String(), "warden/share#") || strings.Contains(buf.String(), "prod-db") || !strings.Contains(buf.String(), "x@y") || !strings.Contains(buf.String(), TemplateShare) {
+		t.Fatalf("sink log: %s", buf.String())
 	}
 	if err := (LogSink{}).Send(context.Background(), Message{}); err != nil {
 		t.Fatal(err)
-	}
-	if sanitizeHeader("a\r\nb") != "a  b" {
-		t.Fatal("sanitize")
 	}
 }
 

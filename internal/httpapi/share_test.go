@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -9,20 +10,26 @@ import (
 	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
 )
 
-type mailbox struct{ sent []share.Message }
+type mailbox struct {
+	sent []share.Message
+	err  error
+}
 
 func (m *mailbox) Send(_ context.Context, msg share.Message) error {
+	if m.err != nil {
+		return m.err
+	}
 	m.sent = append(m.sent, msg)
 	return nil
 }
 
 func tokenOf(t *testing.T, m share.Message) string {
 	t.Helper()
-	i := strings.Index(m.Text, "/warden/share#")
+	i := strings.Index(m.Vars["link"], "/warden/share#")
 	if i < 0 {
 		t.Fatal("no link")
 	}
-	return strings.Fields(m.Text[i+len("/warden/share#"):])[0]
+	return m.Vars["link"][i+len("/warden/share#"):]
 }
 
 func TestShareRoutes(t *testing.T) {
@@ -72,8 +79,8 @@ func TestShareRoutes(t *testing.T) {
 	if !strings.Contains(body, `nonce="abc123"`) || strings.Contains(body, pw) || strings.Contains(body, "root") || strings.Contains(body, tok) || !strings.Contains(body, "location.hash") {
 		t.Fatalf("page body: %s", body)
 	}
-	if !strings.Contains(mb.sent[0].Text, "/warden/share#"+tok) {
-		t.Fatalf("link shape: %s", mb.sent[0].Text)
+	if m := mb.sent[0]; m.Template != share.TemplateShare || m.Vars["link"] != "https://platform.example.org/warden/share#"+tok || m.Vars["message"] != "hello" || m.Vars["openings"] != "2" || m.Vars["secret_name"] != "db" {
+		t.Fatalf("mail: %+v", m)
 	}
 	// Open: first discloses, second discloses (max 2), third 404; the client address comes only from the gateway header.
 	code, out := st.call("", "POST", "/api/warden/v1/share/open", `{"token":"`+tok+`"}`)
@@ -112,6 +119,17 @@ func TestShareRoutes(t *testing.T) {
 	w = do(st.s, "POST", "/api/warden/v1/share/open", `{"token":"`+strings.Repeat("c", 43)+`"}`, map[string]string{"X-Gateway-Client-Addr": "198.51.100.7"})
 	if w.Code != 429 || !strings.Contains(w.Body.String(), "rate_limited") {
 		t.Fatalf("rate: %d %s", w.Code, w.Body.String())
+	}
+	// Notification cannot deliver: the user is told (503 unavailable) and the share is cancelled.
+	mb.err = errors.New("notification unavailable")
+	if code, out := st.call(st.alice, "POST", "/api/warden/v1/secrets/"+id+"/shares", `{"recipient_email":"undelivered@x.test"}`); code != 503 || out["reason"] != "temporarily_unavailable" {
+		t.Fatalf("mail failure: %d %v", code, out)
+	}
+	mb.err = nil
+	for _, row := range st.ms.Shares {
+		if row.RecipientEmail == "undelivered@x.test" && row.State != "cancelled" {
+			t.Fatal("undelivered share kept active")
+		}
 	}
 	// Cancel: creator ok, twice 404, foreign 404.
 	sid := sh["id"].(string)

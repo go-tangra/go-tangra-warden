@@ -12,11 +12,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/mail"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -209,11 +209,11 @@ func (s *Service) Create(ctx context.Context, subj authz.Subjects, secretID stri
 	// The token rides in the fragment: browsers never send it to any server,
 	// so it cannot land in gateway, proxy or module request logs.
 	link := strings.TrimRight(s.cfg.PublicOrigin, "/") + "/warden/share#" + token
-	text := fmt.Sprintf("A credential named %q has been shared with you.\n\nOpen it here (valid until %s, %d opening(s)):\n\n%s\n", sec.Name, sh.ExpiresAt.UTC().Format(time.RFC1123), opens, link)
+	vars := map[string]string{"link": link, "secret_name": sec.Name, "expires": sh.ExpiresAt.UTC().Format(time.RFC1123), "openings": strconv.Itoa(opens)}
 	if in.Message != "" {
-		text += "\nMessage from the sender:\n" + in.Message + "\n"
+		vars["message"] = in.Message
 	}
-	if err := s.mail.Send(ctx, Message{To: addr.Address, Subject: "A credential was shared with you", Text: text}); err != nil {
+	if err := s.mail.Send(ctx, Message{To: addr.Address, Template: TemplateShare, Vars: vars, TenantID: subj.TenantID, CorrelationID: sh.ID}); err != nil {
 		_ = s.st.SetShareState(ctx, subj.TenantID, sh.ID, "cancelled")
 		s.emit(audit.Event{Type: audit.ShareCreated, TenantID: subj.TenantID, ActorKind: "user", ActorID: subj.UserID, SubjectKind: "share", SubjectID: sh.ID, Outcome: "failed", Reason: "mail_failed",
 			Details: map[string]any{"secret_id": secretID}})

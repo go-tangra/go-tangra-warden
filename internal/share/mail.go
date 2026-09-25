@@ -2,67 +2,39 @@ package share
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"net/smtp"
-	"strings"
 )
 
-// Message is one transactional mail.
+// TemplateShare is the notification system template carrying a share link.
+// Its variables: link (secret: redacted in notification's delivery log),
+// secret_name, expires, openings and the optional message.
+const TemplateShare = "warden.share"
+
+// Message is one transactional mail: a notification system template sent to
+// one recipient for a tenant. The wording lives in the template; warden only
+// supplies the variables.
 type Message struct {
-	To, Subject, Text string
+	To            string
+	Template      string
+	Vars          map[string]string
+	TenantID      string
+	CorrelationID string // the share id: ties notification's log entry to warden's audit
 }
 
-// Sender delivers a message.
+// Sender delivers a message; any error means the recipient will not get it.
 type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
-// SMTPConfig configures the SMTP sender; TLS is required unless AllowPlaintext.
-type SMTPConfig struct {
-	Host, Username, Password, From string
-	Port                           int
-	AllowPlaintext                 bool
-}
-
-// SMTP sends through a relay with implicit TLS (465) or STARTTLS (587).
-type SMTP struct{ cfg SMTPConfig }
-
-// NewSMTP validates the configuration.
-func NewSMTP(cfg SMTPConfig) (*SMTP, error) {
-	if cfg.Host == "" || cfg.Port <= 0 || cfg.From == "" {
-		return nil, errors.New("share: mail host, port and from are required")
-	}
-	if !cfg.AllowPlaintext && cfg.Port != 465 && cfg.Port != 587 {
-		return nil, errors.New("share: mail TLS is required (port 465 or 587) unless allow_plaintext")
-	}
-	return &SMTP{cfg: cfg}, nil
-}
-
-// Send delivers via net/smtp (STARTTLS negotiated when offered).
-func (s *SMTP) Send(_ context.Context, m Message) error {
-	body := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
-		s.cfg.From, sanitizeHeader(m.To), sanitizeHeader(m.Subject), m.Text)
-	var auth smtp.Auth
-	if s.cfg.Username != "" {
-		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
-	}
-	return smtp.SendMail(fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port), auth, s.cfg.From, []string{m.To}, []byte(body))
-}
-
-func sanitizeHeader(s string) string {
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
-}
-
-// LogSink records that a mail would have been sent (development). The body
-// carries the share link, so only the recipient and subject are logged.
+// LogSink records that a mail would have been sent (development). The
+// variables carry the share link, so only the recipient and the template are
+// logged.
 type LogSink struct{ Log *slog.Logger }
 
 // Send implements Sender.
 func (l LogSink) Send(_ context.Context, m Message) error {
 	if l.Log != nil {
-		l.Log.Info("mail (dev sink, body withheld)", "to", m.To, "subject", m.Subject)
+		l.Log.Info("mail (dev sink, variables withheld)", "to", m.To, "template", m.Template)
 	}
 	return nil
 }

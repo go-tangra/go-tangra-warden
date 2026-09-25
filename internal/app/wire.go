@@ -3,7 +3,10 @@ package app
 import (
 	"time"
 
+	"google.golang.org/grpc"
+
 	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
+	"github.com/go-tangra/go-tangra-notification/sdk/v4/pkg/notifyclient"
 	wardenv1 "github.com/go-tangra/go-tangra-warden/sdk/v4/api/proto/warden/v1"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/folders"
@@ -38,11 +41,12 @@ func Wire(a *App) error {
 		if a.Cfg.Mail.Transport == "log" {
 			sender = share.LogSink{Log: a.Log}
 		} else {
-			smtp, err := share.NewSMTP(share.SMTPConfig{Host: a.Cfg.Mail.Host, Port: a.Cfg.Mail.Port, Username: a.Cfg.Mail.Username, Password: a.Cfg.Mail.Password, From: a.Cfg.Mail.From, AllowPlaintext: a.Cfg.Mail.AllowPlaintext})
-			if err != nil {
-				return err
-			}
-			sender = smtp
+			// Share links go out through the notification module (system
+			// template warden.share); the connection is obtained on the first
+			// share, so warden does not depend on notification to start.
+			sender = share.NewNotification(func(ctx contextT) (grpc.ClientConnInterface, error) {
+				return a.Freya.Client(ctx, notifyclient.Service)
+			}, a.Log)
 		}
 	}
 	a.Shares = share.New(a.Repo, a.Vault, a.Authz, a.Audit, sender, share.Config{PublicOrigin: a.Cfg.Share.PublicOrigin,
