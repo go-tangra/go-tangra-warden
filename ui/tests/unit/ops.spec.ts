@@ -51,7 +51,9 @@ describe('generator view', () => {
     await flushPromises()
     click(document.body, '[data-test="gen-go"]')
     await flushPromises()
-    expect(bodies[0]).toMatchObject({ length: 20, lower: true, symbols: true })
+    // Exactly the fields POST /generate accepts (additionalProperties: false);
+    // the form's own `source` choice must not be sent.
+    expect(bodies[0]).toEqual({ length: 20, lower: true, upper: true, digits: true, symbols: true })
     expect((document.body.querySelector('[data-test="gen-output"] input') as HTMLInputElement).value).toBe('Srv3rP@ssw0rd!xyz123')
     click(document.body, '[data-test="gen-copy"]')
     await flushPromises()
