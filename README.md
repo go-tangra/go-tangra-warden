@@ -57,7 +57,7 @@ SDK's published `sdk/vX.Y.Z` tag.
 | `internal/app` | wiring: config, platform, store, cache, vault, audit, HTTP/gRPC, gateway lease, permission seeding, reconciler, share sweeper |
 | `internal/authz` | Zanzibar evaluation (check, effective, accessible, grants) |
 | `internal/secrets`, `internal/folders` | secret and folder services (two-phase vault writes, versions, restore, search, TOTP, reconciliation) |
-| `internal/share` | external e-mail shares (hashed tokens, budgets, CIDR policy, sweeper, SMTP) |
+| `internal/share` | external e-mail shares (hashed tokens, budgets, CIDR policy, sweeper, mail through the notification module) |
 | `internal/transfer` | Bitwarden validate/import/export and tenant backups |
 | `internal/vault` | KV v2 client with AppRole login and token renewal, plus an in-memory fake |
 | `internal/...` | generator, statistics, audit vocabulary, rate counters, repository and SQL bindings (RLS, goose migrations) |

@@ -79,15 +79,36 @@ type Share struct {
 	DefaultMaxOpens        int    `yaml:"default_max_opens"`
 }
 
-// Mail configures the SMTP sender for share links.
+// Mail configures how share links are mailed: through the notification
+// module (system template warden.share) or, in development, a log sink.
+//
+// The relay keys (host, port, username, password, from, allow_plaintext) are
+// left over from warden's own SMTP sender: still accepted so existing
+// configurations load, ignored, and reported in one start-up warning. They
+// go away in v5.
 type Mail struct {
-	Transport      string `yaml:"transport"` // smtp | log
+	Transport      string `yaml:"transport"` // notification (default; smtp is read as notification) | log (development only)
 	Host           string `yaml:"host"`
 	Port           int    `yaml:"port"`
 	Username       string `yaml:"username"`
 	Password       string `yaml:"password"`
 	From           string `yaml:"from"`
 	AllowPlaintext bool   `yaml:"allow_plaintext"`
+}
+
+// IgnoredRelayKeys lists the relay keys set in the configuration (names
+// only, never values); nil when none is.
+func (m Mail) IgnoredRelayKeys() []string {
+	var keys []string
+	for _, k := range []struct {
+		name string
+		set  bool
+	}{{"host", m.Host != ""}, {"port", m.Port != 0}, {"username", m.Username != ""}, {"password", m.Password != ""}, {"from", m.From != ""}, {"allow_plaintext", m.AllowPlaintext}} {
+		if k.set {
+			keys = append(keys, k.name)
+		}
+	}
+	return keys
 }
 
 // Limits bound the module's own request shapes.
@@ -104,7 +125,7 @@ func Default() Config {
 		Vault:   Vault{Mount: "warden"},
 		Gateway: Gateway{Service: "gateway"},
 		Share:   Share{DefaultValiditySeconds: 3600, DefaultMaxOpens: 1},
-		Mail:    Mail{Transport: "smtp", Port: 465},
+		Mail:    Mail{Transport: "notification"},
 		Limits:  Limits{TransferMaxBytes: 16 << 20, LookupRatePerMinute: 120},
 	}
 	return c
@@ -184,12 +205,13 @@ func (c Config) Validate() error {
 		return errors.New("config: limits_warden.lookup_rate_per_minute must be positive")
 	}
 	switch c.Mail.Transport {
-	case "smtp", "log":
+	case "notification", "smtp":
+	case "log":
+		if prod {
+			return errors.New("config: mail.transport log is for development only (share links would never be delivered)")
+		}
 	default:
-		return errors.New("config: mail.transport must be smtp or log")
-	}
-	if prod && c.Mail.AllowPlaintext {
-		return errors.New("config: mail.allow_plaintext is not permitted in production")
+		return errors.New("config: mail.transport must be notification or log")
 	}
 	return nil
 }
@@ -203,8 +225,16 @@ func (c Config) Warnings() []string {
 	if c.Valkey.AllowPlaintext {
 		w = append(w, "valkey.allow_plaintext: cache traffic without TLS (development only)")
 	}
-	if c.Mail.AllowPlaintext {
-		w = append(w, "mail.allow_plaintext: share links mailed without TLS (development only)")
+	var ignored []string
+	if c.Mail.Transport == "smtp" {
+		ignored = append(ignored, "mail.transport: smtp (read as notification)")
+	}
+	if keys := c.Mail.IgnoredRelayKeys(); len(keys) > 0 {
+		ignored = append(ignored, "relay keys mail."+strings.Join(keys, ", mail."))
+	}
+	if len(ignored) > 0 {
+		w = append(w, "mail.*: share links are sent through the notification module; ignoring "+strings.Join(ignored, "; ")+
+			" (the relay is configured once, in notification; remove these keys, they are dropped in v5)")
 	}
 	return w
 }

@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/smtp"
 	"net/url"
 	"os"
 	"os/exec"
@@ -42,6 +43,7 @@ import (
 
 	"github.com/go-tangra/go-tangra-warden/v4/internal/app"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/config"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 	"github.com/go-tangra/go-tangra/v4"
 	fconfig "github.com/go-tangra/go-tangra/v4/config"
@@ -220,7 +222,11 @@ limits:
 	wcfg.Vault = config.Vault{Address: vaultAddr, Mount: "warden", RoleIDFile: roleFile, SecretIDFile: secretFile, AllowPlaintext: true}
 	wcfg.Gateway = config.Gateway{Service: "gateway", Issuer: "https://" + gwEdge}
 	wcfg.Share = config.Share{PublicOrigin: "https://" + gwEdge, DefaultValiditySeconds: 3600, DefaultMaxOpens: 1}
-	wcfg.Mail = config.Mail{Transport: "smtp", Host: mpHost, Port: atoi(mpPorts["1025/tcp"]), From: "warden@example.org", AllowPlaintext: true}
+	// Share mail goes through the notification module in production; here a
+	// stand-in renders the warden.share variables and hands them to Mailpit
+	// so the tests read the link as a recipient would.
+	wcfg.Mail = config.Mail{Transport: "notification"}
+	notifier := &mailpitNotifier{addr: mpHost + ":" + mpPorts["1025/tcp"]}
 	disc, err := discovery.NewStatic(map[string][]string{"auth": {authGRPC}, "gateway": {gwGRPC}})
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +235,7 @@ limits:
 	wlog := filepath.Join(dir, "warden.log")
 	logs["warden"] = wlog
 	wf, _ := os.Create(wlog)
-	w, err := app.Build(ctx, wcfg, app.Options{Migrate: true, Logger: slog.NewTextHandler(wf, &slog.HandlerOptions{Level: slog.LevelDebug}), Register: app.Wire,
+	w, err := app.Build(ctx, wcfg, app.Options{Migrate: true, Logger: slog.NewTextHandler(wf, &slog.HandlerOptions{Level: slog.LevelDebug}), Register: app.Wire, Mail: notifier,
 		Freya: []freya.Option{freya.WithIdentityProvider(prov), freya.WithDiscovery(disc)}})
 	if err != nil {
 		t.Fatalf("warden build: %v", err)
@@ -886,3 +892,21 @@ func TestHarnessBoots(t *testing.T) {
 }
 
 func getenv(k string) string { return os.Getenv(k) }
+
+// mailpitNotifier stands in for the notification module: it renders the
+// warden.share system template's variables as plain text and relays them to
+// Mailpit. Only warden.share for a tenant, correlated with a share, is valid.
+type mailpitNotifier struct{ addr string }
+
+func (n *mailpitNotifier) Send(_ context.Context, m share.Message) error {
+	if m.Template != share.TemplateShare || m.TenantID == "" || m.CorrelationID == "" || m.Vars["link"] == "" {
+		return fmt.Errorf("notification stand-in: unexpected message %q for %q", m.Template, m.To)
+	}
+	text := fmt.Sprintf("A credential named %q has been shared with you.\r\n\r\nOpen it here (valid until %s, %s opening(s)):\r\n\r\n%s\r\n",
+		m.Vars["secret_name"], m.Vars["expires"], m.Vars["openings"], m.Vars["link"])
+	if msg := m.Vars["message"]; msg != "" {
+		text += "\r\nMessage from the sender:\r\n" + msg + "\r\n"
+	}
+	body := "From: notification@example.org\r\nTo: " + m.To + "\r\nSubject: A credential was shared with you\r\n\r\n" + text
+	return smtp.SendMail(n.addr, nil, "notification@example.org", []string{m.To}, []byte(body))
+}

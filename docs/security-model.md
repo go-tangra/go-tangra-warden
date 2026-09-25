@@ -69,6 +69,12 @@
   exhausted, cancelled, policy) is a uniform `not_found`, audited as
   `share_refused`; disclosure happens only after the atomic open increment.
   Opens are rate-limited per client address and per token.
+- The link leaves warden only through the notification module (mesh mTLS,
+  system template `warden.share`, key namespace `warden.*`), as a secret
+  variable that notification redacts in its delivery log and audit. warden's
+  own logs, errors and the development log sink carry the recipient and the
+  template, never the link. A share whose mail was not confirmed as sent is
+  cancelled at once.
 
 ## Threats (research.md STRIDE table) and where they are tested
 
