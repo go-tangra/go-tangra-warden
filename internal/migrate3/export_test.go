@@ -105,7 +105,7 @@ func v3Fixture() (*fakeSource, *fakeKV) {
 			{ID: db, ParentID: &infra, Name: "DB", Path: "/Infra/DB", CreateBy: u32(2), CreateTime: &t2},
 		},
 		secrets: []SrcSecret{
-			{ID: "s1", FolderID: &db, Name: "prod", Username: "root", HostURL: "https://db", VaultPath: "warden/0/s1", CurrentVersion: 3, Metadata: []byte(`{"env":"prod"}`),
+			{ID: "s1", FolderID: &db, Name: "prod", Username: "root", HostURL: "https://db", VaultPath: "warden/0/v-s1", CurrentVersion: 3, Metadata: []byte(`{"env":"prod"}`),
 				Status: "SECRET_STATUS_ACTIVE", HasTOTP: true, CreateBy: u32(1), UpdateBy: u32(2), CreateTime: &t1, UpdateTime: &t3},
 			{ID: "s2", Name: "root-level", VaultPath: "warden/0/s2", CurrentVersion: 1, Metadata: []byte("null"), Status: "SECRET_STATUS_ARCHIVED", HasTOTP: true, CreateBy: u32(99)},
 			{ID: "s3", Name: "gone", VaultPath: "warden/0/s3", CurrentVersion: 1, Status: "SECRET_STATUS_DELETED"},
@@ -131,11 +131,11 @@ func v3Fixture() (*fakeSource, *fakeKV) {
 	}
 	kv := &fakeKV{
 		meta: map[string]KVMeta{
-			"warden/0/s1": {Versions: map[int]KVVersion{1: {CreatedTime: t1, Destroyed: true}, 2: {CreatedTime: t2}, 3: {CreatedTime: t3}, 4: {CreatedTime: t3, Deleted: true}}},
-			"warden/0/s2": {Versions: map[int]KVVersion{1: {CreatedTime: t2}, 2: {CreatedTime: t3}}},
+			"warden/0/v-s1": {Versions: map[int]KVVersion{1: {CreatedTime: t1, Destroyed: true}, 2: {CreatedTime: t2}, 3: {CreatedTime: t3}, 4: {CreatedTime: t3, Deleted: true}}},
+			"warden/0/s2":   {Versions: map[int]KVVersion{1: {CreatedTime: t2}, 2: {CreatedTime: t3}}},
 		},
 		data: map[string]map[int]map[string]any{
-			"warden/0/s1":      {2: {"password": "WARDEN-MARKER-PW-2"}, 3: {"password": "WARDEN-MARKER-PW-3"}},
+			"warden/0/v-s1":    {2: {"password": "WARDEN-MARKER-PW-2"}, 3: {"password": "WARDEN-MARKER-PW-3"}},
 			"warden/0/s1/totp": {0: {"totp_url": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP"}},
 			"warden/0/s2":      {1: {"password": "WARDEN-MARKER-PW-r"}, 2: {"nopassword": true}},
 		},
