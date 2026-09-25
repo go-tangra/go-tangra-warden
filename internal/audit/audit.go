@@ -49,6 +49,7 @@ const (
 	ShareCancelled        EventType = "share_cancelled"
 	ShareRefused          EventType = "share_refused"
 	VaultUnavailable      EventType = "vault_unavailable"
+	MigrationImported     EventType = "migration_imported" // one summary per v3 → v4 import (counts only)
 )
 
 var known = map[EventType]struct{}{}
@@ -57,7 +58,7 @@ func init() {
 	for _, t := range []EventType{SecretCreated, SecretRead, SecretPasswordRead, SecretUpdated, SecretPasswordUpdated, SecretVersionRead, SecretRestored,
 		SecretMoved, SecretDeleted, SecretTOTPRead, SecretTOTPSet, SecretTOTPRemoved, FolderCreated, FolderUpdated, FolderMoved, FolderDeleted,
 		GrantCreated, GrantRevoked, AccessRefused, TransferValidated, TransferImported, TransferExported, BackupExported, BackupImported,
-		ShareCreated, ShareOpened, ShareCancelled, ShareRefused, VaultUnavailable} {
+		ShareCreated, ShareOpened, ShareCancelled, ShareRefused, VaultUnavailable, MigrationImported} {
 		known[t] = struct{}{}
 	}
 }
@@ -71,7 +72,7 @@ type Event struct {
 	TenantID      string
 	ActorKind     string // user | service | recipient | system
 	ActorID       string
-	SubjectKind   string // secret | folder | grant | share | transfer | backup | system
+	SubjectKind   string // secret | folder | grant | share | transfer | backup | migration | system
 	SubjectID     string
 	Outcome       string // ok | refused | failed
 	Reason        string
@@ -125,7 +126,7 @@ func Validate(e Event) error {
 		return fmt.Errorf("audit: actor_kind %q", e.ActorKind)
 	}
 	switch e.SubjectKind {
-	case "secret", "folder", "grant", "share", "transfer", "backup", "system":
+	case "secret", "folder", "grant", "share", "transfer", "backup", "migration", "system":
 	default:
 		return fmt.Errorf("audit: subject_kind %q", e.SubjectKind)
 	}

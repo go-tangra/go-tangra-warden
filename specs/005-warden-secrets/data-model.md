@@ -115,7 +115,8 @@ Event types (closed vocabulary): `secret_created`, `secret_read`,
 `folder_updated`, `folder_moved`, `folder_deleted`, `grant_created`,
 `grant_revoked`, `access_refused`, `transfer_validated`, `transfer_imported`,
 `transfer_exported`, `backup_exported`, `backup_imported`, `share_created`,
-`share_opened`, `share_cancelled`, `share_refused`, `vault_unavailable`.
+`share_opened`, `share_cancelled`, `share_refused`, `vault_unavailable`,
+`migration_imported` (one summary event per v3 → v4 import, counts only).
 Details may carry ids, counts, version numbers and field names; a guard refuses
 keys containing `password`, `secret_value`, `seed`, `totp`, `token`, `link`.
 

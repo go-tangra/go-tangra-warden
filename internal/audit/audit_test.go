@@ -60,7 +60,7 @@ func TestValidate(t *testing.T) {
 			t.Errorf("%s: %v", et, err)
 		}
 	}
-	if len(known) != 29 {
+	if len(known) != 30 {
 		t.Fatalf("vocabulary size %d", len(known))
 	}
 }
