@@ -112,6 +112,17 @@ func contains(list []string, s string) bool {
 	return false
 }
 
+// stamp applies the insert timestamp rules of the database: a zero created
+// time is now, a zero updated time is the created time.
+func stamp(created, updated *time.Time, now time.Time) {
+	if created.IsZero() {
+		*created = now
+	}
+	if updated.IsZero() {
+		*updated = *created
+	}
+}
+
 // ---------------------------------------------------------------- folders
 
 func (m *Store) InsertFolder(_ context.Context, f store.Folder) error {
@@ -128,8 +139,7 @@ func (m *Store) InsertFolder(_ context.Context, f store.Folder) error {
 	if f.Ancestors == nil {
 		f.Ancestors = []string{}
 	}
-	now := m.Now()
-	f.CreatedAt, f.UpdatedAt = now, now
+	stamp(&f.CreatedAt, &f.UpdatedAt, m.Now())
 	if f.UpdatedBy == nil {
 		f.UpdatedBy = f.CreatedBy
 	}
@@ -357,8 +367,7 @@ func (m *Store) InsertSecret(_ context.Context, s store.Secret) error {
 			return store.ErrNotFound
 		}
 	}
-	now := m.Now()
-	s.CreatedAt, s.UpdatedAt = now, now
+	stamp(&s.CreatedAt, &s.UpdatedAt, m.Now())
 	if s.UpdatedBy == nil {
 		s.UpdatedBy = s.CreatedBy
 	}
@@ -608,7 +617,9 @@ func (m *Store) InsertVersion(_ context.Context, v store.SecretVersion) error {
 			return nil // ON CONFLICT DO NOTHING
 		}
 	}
-	v.CreatedAt = m.Now()
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = m.Now()
+	}
 	m.Versions[v.SecretID] = append(m.Versions[v.SecretID], v)
 	return nil
 }
@@ -653,12 +664,17 @@ func (m *Store) UpsertGrant(_ context.Context, g store.Grant) (store.Grant, erro
 	defer m.mu.Unlock()
 	for k, o := range m.Grants {
 		if o.TenantID == g.TenantID && o.ResourceType == g.ResourceType && o.ResourceID == g.ResourceID && o.SubjectType == g.SubjectType && o.SubjectID == g.SubjectID {
-			o.Relation, o.GrantedBy, o.GrantedAt, o.ExpiresAt = g.Relation, g.GrantedBy, m.Now(), g.ExpiresAt
+			if g.GrantedAt.IsZero() {
+				g.GrantedAt = m.Now()
+			}
+			o.Relation, o.GrantedBy, o.GrantedAt, o.ExpiresAt = g.Relation, g.GrantedBy, g.GrantedAt, g.ExpiresAt
 			m.Grants[k] = o
 			return o, nil
 		}
 	}
-	g.GrantedAt = m.Now()
+	if g.GrantedAt.IsZero() {
+		g.GrantedAt = m.Now()
+	}
 	m.Grants[g.ID] = g
 	return g, nil
 }

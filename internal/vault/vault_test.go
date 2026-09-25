@@ -40,6 +40,7 @@ type stub struct {
 	versions  map[string][]map[string]any // path → versions (index+1)
 	destroyed map[string]bool             // whole path destroyed
 	gone      map[string]map[int]bool     // path → destroyed version numbers
+	denyDel   bool                        // only DELETE on a data path refused
 }
 
 func newStub() *stub {
@@ -104,6 +105,17 @@ func (s *stub) handler() http.Handler {
 					return
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"version": len(s.versions[key]), "created_time": time.Now().UTC().Format(time.RFC3339)}})
+			case http.MethodDelete: // soft-delete of the latest version
+				if s.denyDel {
+					w.WriteHeader(403)
+					_ = json.NewEncoder(w).Encode(map[string]any{"errors": []string{"permission denied"}})
+					return
+				}
+				if s.gone[key] == nil {
+					s.gone[key] = map[int]bool{}
+				}
+				s.gone[key][len(s.versions[key])] = true
+				w.WriteHeader(204)
 			case http.MethodGet:
 				vs := s.versions[key]
 				if len(vs) == 0 || s.destroyed[key] {
@@ -593,5 +605,57 @@ func TestFakeExtras(t *testing.T) {
 	f.HealthState = HealthSealed
 	if f.Health(ctx) != HealthSealed {
 		t.Fatal("health state")
+	}
+}
+
+func TestSkipVersion(t *testing.T) {
+	ctx := context.Background()
+	st := newStub()
+	c, _ := newClient(t, st)
+	if n, err := c.SkipVersion(ctx, tid, sid); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	if n, err := c.PutPassword(ctx, tid, sid, "pw"); err != nil || n != 2 {
+		t.Fatal(n, err)
+	}
+	if _, err := c.GetPassword(ctx, tid, sid, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("skipped version readable: %v", err)
+	}
+	if vs, _ := c.Versions(ctx, tid, sid); len(vs) != 1 || vs[0] != 2 {
+		t.Fatal(vs)
+	}
+	if _, err := c.SkipVersion(ctx, "bad", sid); !errors.Is(err, ErrBadPath) {
+		t.Fatal(err)
+	}
+	st.denyDel = true
+	if _, err := c.SkipVersion(ctx, tid, sid); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("delete refused: %v", err)
+	}
+	st.denyDel, st.noMeta = false, true
+	if _, err := c.SkipVersion(ctx, tid, sid); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("no metadata: %v", err)
+	}
+	st.noMeta, st.deny = false, true
+	if _, err := c.SkipVersion(ctx, tid, sid); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("put refused: %v", err)
+	}
+
+	f := NewFake()
+	if n, err := f.SkipVersion(ctx, tid, sid); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	if _, err := f.GetPassword(ctx, tid, sid, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatal(err)
+	}
+	if _, err := f.SkipVersion(ctx, "bad", sid); !errors.Is(err, ErrBadPath) {
+		t.Fatal(err)
+	}
+	f.FailAfter = 2
+	if _, err := f.SkipVersion(ctx, tid, sid); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("fail-after")
+	}
+	f.Down = true
+	if _, err := f.SkipVersion(ctx, tid, sid); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("down")
 	}
 }

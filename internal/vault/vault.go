@@ -238,6 +238,29 @@ func (c *Client) PutPassword(ctx context.Context, tenantID, secretID, password s
 	return sec.VersionMetadata.Version, nil
 }
 
+// SkipVersion consumes the next KV version number without keeping material:
+// it writes an empty marker and soft-deletes it at once (the data path's
+// delete capability, already in the policy). A migration replaying a history
+// whose older versions were destroyed uses it to keep the original version
+// numbers; reads of a skipped version answer ErrNotFound.
+func (c *Client) SkipVersion(ctx context.Context, tenantID, secretID string) (int, error) {
+	p, err := Path(tenantID, secretID)
+	if err != nil {
+		return 0, err
+	}
+	sec, err := c.kv.Put(ctx, p, map[string]any{"skipped": true})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	if sec == nil || sec.VersionMetadata == nil {
+		return 0, fmt.Errorf("%w: no version metadata", ErrUnavailable)
+	}
+	if err := c.kv.Delete(ctx, p); err != nil {
+		return 0, mapErr(err)
+	}
+	return sec.VersionMetadata.Version, nil
+}
+
 // GetPassword reads one version (0 = current).
 func (c *Client) GetPassword(ctx context.Context, tenantID, secretID string, version int) (string, error) {
 	p, err := Path(tenantID, secretID)

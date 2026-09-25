@@ -30,7 +30,7 @@ cover:
 	./scripts/coverage-gate.sh $(COVER_OUT)
 
 fuzz:
-	for f in FuzzFolderName FuzzSecretInput FuzzTotpSeed FuzzPathBuilder FuzzBitwarden FuzzBackup FuzzGenerator FuzzShareToken; do \
+	for f in FuzzFolderName FuzzSecretInput FuzzTotpSeed FuzzPathBuilder FuzzBitwarden FuzzBackup FuzzGenerator FuzzShareToken FuzzV3Bundle FuzzV3Sealed; do \
 	  $(GO) test -run xxx -fuzz=$$f -fuzztime=20s ./tests/fuzz/ || exit 1; done
 
 generate:

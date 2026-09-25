@@ -30,10 +30,13 @@ func scanFolders(rows pgx.Rows) ([]Folder, error) {
 	return out, rows.Err()
 }
 
-// InsertFolder creates a folder; a sibling name clash is ErrConflict.
+// InsertFolder creates a folder; a sibling name clash is ErrConflict. Zero
+// timestamps mean now(); a nil UpdatedBy means CreatedBy (a migration passes
+// the original values).
 func InsertFolder(ctx context.Context, tx pgx.Tx, f Folder) error {
-	_, err := tx.Exec(ctx, `INSERT INTO folders (id, tenant_id, parent_id, name, path, ancestors, created_by, updated_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$7)`, f.ID, f.TenantID, f.ParentID, f.Name, f.Path, nonNil(f.Ancestors), f.CreatedBy)
+	_, err := tx.Exec(ctx, `INSERT INTO folders (id, tenant_id, parent_id, name, path, ancestors, created_by, updated_by, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7::uuid,coalesce($8::uuid,$7::uuid),coalesce($9::timestamptz,now()),coalesce($10::timestamptz,$9::timestamptz,now()))`,
+		f.ID, f.TenantID, f.ParentID, f.Name, f.Path, nonNil(f.Ancestors), f.CreatedBy, f.UpdatedBy, nullTime(f.CreatedAt), nullTime(f.UpdatedAt))
 	return conflict(err)
 }
 
@@ -171,11 +174,13 @@ func scanSecrets(rows pgx.Rows) ([]Secret, error) {
 	return out, rows.Err()
 }
 
-// InsertSecret creates the metadata row (version 0 until the first material write commits).
+// InsertSecret creates the metadata row (version 0 until the first material
+// write commits). Zero timestamps mean now(); a nil UpdatedBy means CreatedBy.
 func InsertSecret(ctx context.Context, tx pgx.Tx, s Secret) error {
-	_, err := tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, folder_id, name, username, host_url, description, metadata, vault_path, current_version, has_totp, created_by, updated_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)`,
-		s.ID, s.TenantID, s.FolderID, s.Name, s.Username, s.HostURL, s.Description, jsonOrEmpty(s.Metadata), s.VaultPath, s.CurrentVersion, s.HasTOTP, s.CreatedBy)
+	_, err := tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, folder_id, name, username, host_url, description, metadata, vault_path, current_version, has_totp, created_by, updated_by, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::uuid,coalesce($13::uuid,$12::uuid),coalesce($14::timestamptz,now()),coalesce($15::timestamptz,$14::timestamptz,now()))`,
+		s.ID, s.TenantID, s.FolderID, s.Name, s.Username, s.HostURL, s.Description, jsonOrEmpty(s.Metadata), s.VaultPath, s.CurrentVersion, s.HasTOTP, s.CreatedBy,
+		s.UpdatedBy, nullTime(s.CreatedAt), nullTime(s.UpdatedAt))
 	return err
 }
 
@@ -326,9 +331,12 @@ func PendingSecrets(ctx context.Context, tx pgx.Tx, olderThan time.Time, limit i
 
 // ---------------------------------------------------------------- versions
 
+// InsertVersion records one version (idempotent per number); a zero
+// CreatedAt means now().
 func InsertVersion(ctx context.Context, tx pgx.Tx, v SecretVersion) error {
-	_, err := tx.Exec(ctx, `INSERT INTO secret_versions (secret_id, tenant_id, version, comment, checksum, source, material_missing, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (secret_id, version) DO NOTHING`, v.SecretID, v.TenantID, v.Version, v.Comment, v.Checksum, v.Source, v.MaterialMissing, v.CreatedBy)
+	_, err := tx.Exec(ctx, `INSERT INTO secret_versions (secret_id, tenant_id, version, comment, checksum, source, material_missing, created_by, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,coalesce($9::timestamptz,now())) ON CONFLICT (secret_id, version) DO NOTHING`,
+		v.SecretID, v.TenantID, v.Version, v.Comment, v.Checksum, v.Source, v.MaterialMissing, v.CreatedBy, nullTime(v.CreatedAt))
 	return err
 }
 
@@ -387,12 +395,13 @@ func scanGrants(rows pgx.Rows) ([]Grant, error) {
 	return out, rows.Err()
 }
 
-// UpsertGrant creates or replaces the grant for (resource, subject).
+// UpsertGrant creates or replaces the grant for (resource, subject); a zero
+// GrantedAt means now().
 func UpsertGrant(ctx context.Context, tx pgx.Tx, g Grant) (Grant, error) {
-	return scanGrant(tx.QueryRow(ctx, `INSERT INTO grants (id, tenant_id, resource_type, resource_id, subject_type, subject_id, relation, granted_by, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		ON CONFLICT (tenant_id, resource_type, resource_id, subject_type, subject_id) DO UPDATE SET relation = EXCLUDED.relation, granted_by = EXCLUDED.granted_by, granted_at = now(), expires_at = EXCLUDED.expires_at
-		RETURNING `+grantCols, g.ID, g.TenantID, g.ResourceType, g.ResourceID, g.SubjectType, g.SubjectID, g.Relation, g.GrantedBy, g.ExpiresAt))
+	return scanGrant(tx.QueryRow(ctx, `INSERT INTO grants (id, tenant_id, resource_type, resource_id, subject_type, subject_id, relation, granted_by, expires_at, granted_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,coalesce($10::timestamptz,now()))
+		ON CONFLICT (tenant_id, resource_type, resource_id, subject_type, subject_id) DO UPDATE SET relation = EXCLUDED.relation, granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at, expires_at = EXCLUDED.expires_at
+		RETURNING `+grantCols, g.ID, g.TenantID, g.ResourceType, g.ResourceID, g.SubjectType, g.SubjectID, g.Relation, g.GrantedBy, g.ExpiresAt, nullTime(g.GrantedAt)))
 }
 
 // GetGrant by id.
