@@ -3,7 +3,7 @@
 // (audited, never persisted), rotate it, one-time codes and email shares.
 // Module-unique; rendered under the kit's record form in the secret drawer.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { UiAlert, UiButton, UiSecretField, UiCopyButton, UiForm, UiInput, UiTextarea, UiSelect, UiNumberInput, UiSection, UiDataTable, UiStatusChip, UiDrawer, useConfirm, type Column, type SelectOption } from '@go-tangra/ui'
+import { UiAlert, UiButton, UiSecretField, UiForm, UiInput, UiTextarea, UiSelect, UiNumberInput, UiSection, UiDataTable, UiStatusChip, UiDrawer, useConfirm, type Column, type SelectOption } from '@go-tangra/ui'
 import { useZodForm } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import type { Secret } from '@/api/types'
@@ -32,12 +32,43 @@ function reset(): void {
   passwordForm.reset({ password: '', comment: '' })
   totpForm.reset({ seed: '' })
 }
-onBeforeUnmount(() => { stopTimer(); revealed.value = '' })
+onBeforeUnmount(() => { stopTimer(); if (copiedTimer) clearTimeout(copiedTimer); revealed.value = '' })
 
 async function reveal(): Promise<void> {
   error.value = ''
   try {
     revealed.value = (await secrets.reveal(props.secret.id)).password
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+// Copy without showing: fetch the current value (audited like a reveal)
+// straight into the clipboard; nothing is kept in component state.
+const copied = ref<'' | 'password' | 'totp'>('')
+let copiedTimer: ReturnType<typeof setTimeout> | undefined
+function flash(what: 'password' | 'totp'): void {
+  copied.value = what
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copied.value = '' }, 1500)
+}
+async function copyPassword(): Promise<void> {
+  error.value = ''
+  try {
+    const value = revealed.value || (await secrets.reveal(props.secret.id)).password
+    await navigator.clipboard.writeText(value)
+    flash('password')
+  } catch (e) {
+    error.value = describe(e)
+  }
+}
+async function copyCode(): Promise<void> {
+  error.value = ''
+  try {
+    if (!code.value) await loadCode()
+    if (code.value) {
+      await navigator.clipboard.writeText(code.value.code)
+      flash('totp')
+    }
   } catch (e) {
     error.value = describe(e)
   }
@@ -123,12 +154,26 @@ const shareColumns: Column<Share>[] = [
 <template>
   <div class="mt-4 flex flex-col gap-4">
     <UiAlert v-if="error" kind="error" data-test="drawer-error">{{ error }}</UiAlert>
-    <UiSection title="Password" :description="'Version ' + secret.current_version + '. Revealing is recorded in the audit trail.'">
+    <UiSection title="Password" :description="'Version ' + secret.current_version + '. Revealing or copying is recorded in the audit trail.'" data-test="password-section">
       <div class="flex flex-wrap items-end gap-2">
         <UiSecretField id="revealed-password" :model-value="revealed || '••••••••'" label="Password" readonly :revealable="!!revealed" class="grow" data-test="revealed-password" />
         <UiButton variant="soft" data-test="reveal" @click="reveal">Reveal</UiButton>
-        <UiCopyButton v-if="revealed" :value="revealed" label="Copy password" />
+        <UiButton variant="soft" :icon="copied === 'password' ? 'mdi-check' : 'mdi-content-copy'" aria-label="Copy password" data-test="copy-password" @click="copyPassword">{{ copied === 'password' ? 'Copied' : 'Copy' }}</UiButton>
       </div>
+      <div v-if="secret.has_totp" class="mt-3 flex flex-wrap items-center gap-2" data-test="totp-row">
+        <span class="text-sm text-base-content/70">One-time code</span>
+        <output class="font-mono text-2xl tracking-widest" data-test="totp-code">{{ code?.code ?? '------' }}</output>
+        <span v-if="code" class="text-xs text-base-content/70" data-test="totp-expires">{{ code.expires_in }}s</span>
+        <UiButton variant="soft" size="sm" data-test="totp-load" @click="loadCode">{{ code ? 'Refresh' : 'Show code' }}</UiButton>
+        <UiButton variant="soft" size="sm" :icon="copied === 'totp' ? 'mdi-check' : 'mdi-content-copy'" aria-label="Copy one-time code" data-test="copy-totp" @click="copyCode">{{ copied === 'totp' ? 'Copied' : 'Copy' }}</UiButton>
+        <UiButton v-if="canWrite" variant="text" size="sm" color="error" data-test="totp-remove" @click="dropTotp">Remove</UiButton>
+      </div>
+      <UiForm v-else-if="canWrite" :form="totpForm" class="mt-3">
+        <div class="flex flex-wrap items-end gap-2">
+          <UiSecretField v-bind="totpForm.field('seed')" label="TOTP seed" class="grow" data-test="totp-seed" />
+          <UiButton type="submit" variant="soft" size="sm" :loading="totpForm.submitting.value" data-test="totp-save">Save seed</UiButton>
+        </div>
+      </UiForm>
       <UiButton variant="text" size="sm" class="mt-2" data-test="open-versions" @click="emit('versions', secret)">Version history</UiButton>
       <UiForm v-if="canWrite" :form="passwordForm" class="mt-3">
         <div class="flex flex-col gap-2">
@@ -138,30 +183,13 @@ const shareColumns: Column<Share>[] = [
         </div>
       </UiForm>
     </UiSection>
-    <UiSection title="One-time code">
-      <template v-if="secret.has_totp">
-        <div class="flex flex-wrap items-center gap-2">
-          <output class="font-mono text-2xl tracking-widest" data-test="totp-code">{{ code?.code ?? '------' }}</output>
-          <span v-if="code" class="text-xs text-base-content/70" data-test="totp-expires">{{ code.expires_in }}s</span>
-          <UiButton variant="soft" size="sm" data-test="totp-load" @click="loadCode">{{ code ? 'Refresh' : 'Show code' }}</UiButton>
-          <UiButton v-if="canWrite" variant="text" size="sm" color="error" data-test="totp-remove" @click="dropTotp">Remove</UiButton>
-        </div>
-      </template>
-      <UiForm v-else-if="canWrite" :form="totpForm">
-        <div class="flex flex-wrap items-end gap-2">
-          <UiSecretField v-bind="totpForm.field('seed')" label="TOTP seed" class="grow" data-test="totp-seed" />
-          <UiButton type="submit" variant="soft" size="sm" :loading="totpForm.submitting.value" data-test="totp-save">Save seed</UiButton>
-        </div>
-      </UiForm>
-      <p v-else class="text-xs text-base-content/70">No one-time code configured.</p>
-    </UiSection>
     <UiSection v-if="canShare" title="Shared links" data-test="shares-panel">
       <UiAlert v-if="shares.error" kind="error" class="mb-2" data-test="shares-error">{{ shares.error }}</UiAlert>
       <UiDataTable :items="shares.items" :columns="shareColumns" caption="Shared links" empty-title="No links yet" :row-attrs="(s) => ({ 'data-test': 'share-' + s.id })">
         <template #cell-state="{ row }"><UiStatusChip :status="row.state" :colors="{ consumed: 'neutral', expired: 'neutral', cancelled: 'neutral' }" :data-test="'share-state-' + row.id" /></template>
         <template #actions="{ row }"><UiButton v-if="row.state === 'active'" size="xs" variant="text" color="error" :data-test="'share-cancel-' + row.id" @click="cancelShare(row)">Cancel</UiButton></template>
       </UiDataTable>
-      <UiButton size="sm" variant="soft" class="mt-2" icon="mdi-email-fast-outline" data-test="share-new" @click="openShare">Share by email</UiButton>
+      <UiButton size="sm" variant="soft" class="mt-2" icon="mdi-email-outline" data-test="share-new" @click="openShare">Share by email</UiButton>
     </UiSection>
     <UiDrawer v-model="shareOpen" :title="'Share “' + secret.name + '” by email'" size="md" data-test="share-dialog">
       <UiAlert v-if="shareDone" kind="success" data-test="share-done">A link was mailed to {{ shareDone }}. It reveals the current password and is never shown here.</UiAlert>

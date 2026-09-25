@@ -201,6 +201,41 @@ describe('secret create/edit (schema + drawer)', () => {
     vi.useRealTimers()
   })
 
+  it('copies the password without revealing it and the one-time code, listed under the password', async () => {
+    const written: string[] = []
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async (v: string) => { written.push(v) }) } })
+    stubFetch((url) => {
+      if (url === '/api/warden/v1/secrets/s1/totp') return { status: 200, body: { code: '654321', period: 30, expires_in: 20 } }
+      if (url === '/api/warden/v1/secrets/s1/password') return { status: 200, body: { password: 'WARDEN-MARKER-PW-copy', version: 1 } }
+      return { status: 200, body: { items: [] } }
+    })
+    const w = mountInLayout(SecretDetails, { secret: { ...db, has_totp: true } })
+    await flushPromises()
+    const panel = w.element as HTMLElement
+    // The one-time code sits in the password section, right after the password field.
+    const section = panel.querySelector('[data-test="revealed-password"]')!.closest('section, [data-test="password-section"]')!
+    expect(section.querySelector('[data-test="totp-code"]')).not.toBeNull()
+    click(panel, '[data-test="copy-password"]')
+    await flushPromises()
+    expect(written).toEqual(['WARDEN-MARKER-PW-copy'])
+    // Copying does not reveal the value on screen.
+    expect((panel.querySelector('[data-test="revealed-password"] input') as HTMLInputElement).value).not.toContain('WARDEN-MARKER')
+    click(panel, '[data-test="copy-totp"]')
+    await flushPromises()
+    expect(written).toEqual(['WARDEN-MARKER-PW-copy', '654321'])
+    w.unmount()
+  })
+
+  it('uses a known icon for sharing by email', async () => {
+    stubFetch(() => ({ status: 200, body: { items: [] } }))
+    const w = mountInLayout(SecretDetails, { secret: db })
+    await flushPromises()
+    const btn = (w.element as HTMLElement).querySelector('[data-test="share-new"]')!
+    expect(btn.innerHTML).not.toContain('email-fast')
+    expect(btn.querySelector('[class*="icon"], svg, .iconify, [class*="mdi"], [class*="tabler"]')).not.toBeNull()
+    w.unmount()
+  })
+
   it('reports vault outages from reveal', async () => {
     stubFetch(() => ({ status: 503, body: { reason: 'vault_unavailable' } }))
     const w = mountInLayout(SecretDetails, { secret: db })
