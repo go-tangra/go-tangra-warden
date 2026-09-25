@@ -10,7 +10,7 @@
 | `vault.role_id_file` / `vault.secret_id_file` or `vault.role_id_secret` / `vault.secret_id_secret` | AppRole credentials from files (0600) or environment variables named by the `*_secret` keys; exactly one source each |
 | `gateway.service`, `gateway.issuer` | gateway service name for discovery and the platform token issuer |
 | `share.public_origin`, `share.default_validity_seconds`, `share.default_max_opens` | origin of share links and defaults (1 h, 1 reveal) |
-| `mail.*` | SMTP relay for share links (`transport: smtp` or `log`; TLS unless `allow_plaintext`) |
+| `mail.transport` | how share links are mailed: `notification` (default; the notification module sends the `warden.share` system template) or `log` (development only, refused in production; logs recipient and template, never the link). `smtp` is read as `notification`. The old relay keys `mail.host`, `port`, `username`, `password`, `from`, `allow_plaintext` are accepted, ignored and named in one start-up warning (dropped in v5) |
 | `limits.max_request_bytes` | must be ≥ `limits_warden.transfer_max_bytes` (16 MiB) so Bitwarden and backup uploads pass the Freya HTTP server; the gateway edge needs the same |
 | `limits_warden.transfer_max_bytes`, `limits_warden.lookup_rate_per_minute` | upload cap (4–64 MiB) and per-subject rate for share opens |
 
@@ -67,11 +67,37 @@ the gateway edge body limit to 16 MiB + slack (`limits.max_request_bytes:
 routes declare their own 120 s timeout in the manifest.
 
 
-## Notification module (feature 006)
+## Share mail through the notification module (feature 017)
 
-Transactional and share mail is still sent directly by warden's own mailer.
-When the notification module is deployed, warden's outbound mail (share links,
-invitations relayed on its behalf) can move to `pkg/notifyclient` so that all
-tenant mail is delivered, templated and audited in one place. This is a
-follow-up, out of scope for feature 005; the notification module already
-exposes `Notifier/Send` for it.
+warden has no mail relay of its own. A share link is sent by the notification
+module (`notification.v1.Notifier/Send` over the mTLS mesh) as the system
+template `warden.share` for the share's tenant, with the share id as the
+correlation id. Variables:
+
+| Variable | Content |
+|----------|---------|
+| `link` | `https://<share.public_origin>/warden/share#<token>`; a **secret** variable, redacted in notification's delivery log and audit |
+| `secret_name` | the shared secret's name |
+| `expires` | expiry, RFC 1123 in UTC |
+| `openings` | the reveal budget |
+| `message` | the sender's message; omitted when empty |
+
+- The relay (host, TLS, credentials, sender address) is configured once, in
+  notification's `platform_email`; a tenant's own enabled email channel takes
+  precedence. The wording of the mail is edited in notification's template
+  UI.
+- Discovery must resolve `notification`; the notification policy must allow
+  `svc/warden` on `Send` (it does by default). warden connects on the first
+  share, so it starts and serves everything else while notification is down.
+- Only a confirmed delivery creates a share. When notification is
+  unreachable, throttled, refuses the send (unknown key, email not
+  configured) or the relay fails (temporary or permanent), the share is
+  cancelled, audited as `share_created` with outcome `failed` / reason
+  `mail_failed`, and the user gets `503 temporarily_unavailable`: the link is
+  only ever mailed, so an unsent share could not be opened anyway. warden
+  logs the template, tenant, share id and notification's (scrubbed) reason,
+  never the link; the failed attempt is in notification's delivery log under
+  the same correlation id.
+- Upgrading: remove `mail.host` … `mail.allow_plaintext` and set
+  `mail.transport: notification`; until then warden starts with one warning
+  naming the ignored keys.
