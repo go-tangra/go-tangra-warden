@@ -15,6 +15,7 @@ discovery:
   static:
     gateway: ["127.0.0.1:9643"]
     auth: ["127.0.0.1:9543"]
+    notification: ["127.0.0.1:9943"]
 limits:
   max_request_bytes: 16842752 # Bitwarden / backup uploads (16 MiB + slack); JSON handlers keep their own 64 KiB cap
 limits_warden:
@@ -38,9 +39,8 @@ gateway:
   issuer: https://localhost:8443
 share:
   public_origin: https://localhost:8443
+# Share links are mailed by the notification module (system template
+# warden.share); the relay is configured once, in notification. Use
+# `transport: log` to run warden without notification (links are not sent).
 mail:
-  transport: smtp
-  host: 127.0.0.1
-  port: 1026
-  from: warden@example.org
-  allow_plaintext: true
+  transport: notification
