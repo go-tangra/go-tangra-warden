@@ -53,12 +53,28 @@
 - Database backups alone are useless without the vault: the two must be
   restored together, or a warden backup with material used instead.
 
-## Permissions seeding
+## Permissions and module roles
 
-Warden registers its API permissions and the built-in role grants with the
-auth service (`RegisterPermissions` with `builtin_grants`) at start and every
-five minutes, so tenants created later receive them. Custom roles can be
-given individual permissions in the auth console.
+Warden registers with the auth service as module `warden` (auth SDK
+`authclient.Registration`, feature 019) at start, retrying every 5 s until
+auth accepts, and then every five minutes so tenants created later receive
+the roles and grants. The registration carries the API permissions, the
+module roles and the built-in role grants (owner, admin: everything; member:
+secrets:read/write/share, folders:manage, permissions:manage; auditor,
+operator: stats:read).
+
+Module roles (locked in auth; administrators assign them or clone them into
+custom roles in the auth console):
+
+| Role | Display name | Permissions |
+|---|---|---|
+| `administrator` | Warden administrator | all ten warden permissions |
+| `editor` | Warden editor | secrets:read, secrets:write, secrets:share, folders:manage, permissions:manage |
+| `viewer` | Warden viewer | secrets:read |
+
+A role only opens the API; access to individual secrets and folders is still
+decided by warden's own grants. Skipped built-in grants (warn) and rejected
+roles (error) are logged as `auth registration: ...`.
 
 ## Gateway
 

@@ -31,8 +31,10 @@ go-tangra-auth  <---->  go-tangra-portal (gateway)  <---->  go-tangra-warden
 
 - Built on `github.com/go-tangra/go-tangra/v4` (mTLS transports, identity,
   service policy, audit, observability).
-- Verifies platform tokens and seeds its permissions and built-in role grants
-  with the auth SDK (`github.com/go-tangra/go-tangra-auth/sdk/v4`).
+- Verifies platform tokens and registers its permissions, module roles
+  (Warden administrator, editor, viewer) and built-in role grants with the
+  auth SDK (`github.com/go-tangra/go-tangra-auth/sdk/v4`); see
+  [docs/operations.md](docs/operations.md#permissions-and-module-roles).
 - Registers with the gateway through the portal SDK
   (`github.com/go-tangra/go-tangra-portal/sdk/v4`), which fronts the browser API,
   the public share route and the federated UI remote.
