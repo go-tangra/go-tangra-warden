@@ -113,7 +113,9 @@ export const useOps = defineStore('warden-ops', () => {
   }
 
   async function generate(o: GeneratorOptions): Promise<string> {
-    const out = await api<{ password: string }>('POST', 'generate', o)
+    // Only the generator options: the API refuses unknown fields.
+    const { length, lower, upper, digits, symbols } = o
+    const out = await api<{ password: string }>('POST', 'generate', { length, lower, upper, digits, symbols })
     return out.password
   }
 
