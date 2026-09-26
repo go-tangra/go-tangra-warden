@@ -156,9 +156,11 @@ db:
 valkey: { addresses: ["%s"], password: test, ca_file: %s }
 openfga: { url: http://%s:%s, preshared_key: test-key, allow_plaintext: true }
 kek: { source: file, path: %s }
-email: { transport: smtp, host: %s, port: %s, from: auth@example.org, allow_plaintext: true }
-`, trustDomain, authCert, authKey, bundle, abs(t, "../../../auth/deploy/policy.yaml"), authGRPC, authHTTP, gwGRPC, gwEdge,
-		pg, adminAuth, valkeyAddr, certPath, fgaHost, fgaPorts["8080/tcp"], kekPath, mpHost, mpPorts["1025/tcp"])
+# auth delivers mail through the notification module, which this harness
+# does not run: the development log sink records each message instead.
+email: { transport: log }
+`, trustDomain, authCert, authKey, bundle, filepath.Join(serviceDir(t, "auth"), "deploy", "policy.yaml"), authGRPC, authHTTP, gwGRPC, gwEdge,
+		pg, adminAuth, valkeyAddr, certPath, fgaHost, fgaPorts["8080/tcp"], kekPath)
 	if err := os.WriteFile(authCfg, []byte(authYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +198,7 @@ forward: { body_bytes: 1048576, streams_per_client: 32, stream_max: 10m, module_
 operators: { roles: [operator] }
 limits:
   max_request_bytes: 16842752
-`, trustDomain, gwCert, gwKey, bundle, abs(t, "../../../gateway/deploy/policy.yaml"), gwGRPC, authGRPC, gwEdge, gwEdge, gwEdge, pg, pg, valkeyAddr, certPath, gwEdge)
+`, trustDomain, gwCert, gwKey, bundle, filepath.Join(serviceDir(t, "gateway"), "deploy", "policy.yaml"), gwGRPC, authGRPC, gwEdge, gwEdge, gwEdge, pg, pg, valkeyAddr, certPath, gwEdge)
 	if err := os.WriteFile(gwCfg, []byte(gwYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +448,7 @@ func (e *Env) CreateTenant(slug, ownerEmail string) (*Session, string) {
 	if tid == "" {
 		e.T.Fatalf("create tenant: no tenant id in %v", body)
 	}
-	link := acceptLinkRE.FindString(e.LastMail(ownerEmail))
+	link := e.InvitationLink(ownerEmail)
 	if link == "" {
 		e.T.Fatalf("no invitation link mailed to %s", ownerEmail)
 	}
@@ -482,7 +484,7 @@ func (e *Env) Invite(admin *Session, email string, roles ...string) *Session {
 	if code, body := admin.JSON(http.MethodPost, "/api/v1/admin/invitations", map[string]any{"email": email, "role_ids": ids}); code != 202 {
 		e.T.Fatalf("invite → %d %v", code, body)
 	}
-	link := acceptLinkRE.FindString(e.LastMail(email))
+	link := e.InvitationLink(email)
 	if link == "" {
 		e.T.Fatalf("no invitation link mailed to %s", email)
 	}
@@ -510,6 +512,32 @@ func (e *Env) SeedGrants() {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+// InvitationLink returns the newest invitation link auth sent to an address
+// (waits up to 20 s). auth runs with the development mail sink, which logs
+// every message with its template variables.
+func (e *Env) InvitationLink(to string) string {
+	e.T.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if b, err := os.ReadFile(e.logs["auth"]); err == nil {
+			link := ""
+			for _, line := range strings.Split(string(b), "\n") {
+				if strings.Contains(line, "email (dev sink)") && strings.Contains(line, `"to":"`+to+`"`) {
+					if l := acceptLinkRE.FindString(line); l != "" {
+						link = l
+					}
+				}
+			}
+			if link != "" {
+				return link
+			}
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	e.T.Fatalf("no invitation for %s in the auth log", to)
+	return ""
 }
 
 // LastMail returns the text of the newest message to an address (waits up to 20 s).
@@ -808,13 +836,42 @@ func buildService(t *testing.T, name, pkg string) string {
 	}
 	out := filepath.Join(os.TempDir(), fmt.Sprintf("%ssvc-warden-%d", name, os.Getpid()))
 	cmd := exec.Command("go", "build", "-o", out, pkg)
-	cmd.Dir = abs(t, "../../../"+name)
+	cmd.Dir = serviceDir(t, name)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		buildErrs[name] = fmt.Errorf("build %s: %v\n%s", name, err, b)
 		t.Fatal(buildErrs[name])
 	}
 	built[name] = out
 	return out
+}
+
+// serviceCheckouts maps the services the harness builds to their repositories
+// and the variable that overrides the checkout location.
+var serviceCheckouts = map[string]struct{ repo, env, cmd string }{
+	"auth":    {"go-tangra-auth", "GO_TANGRA_AUTH_DIR", "authsvc"},
+	"gateway": {"go-tangra-portal", "GO_TANGRA_PORTAL_DIR", "gatewaysvc"},
+}
+
+// serviceDir is the checkout the harness builds a service from. The auth and
+// portal modules keep their sdks as in-repo replaces, so they cannot be built
+// from the module cache: GO_TANGRA_AUTH_DIR / GO_TANGRA_PORTAL_DIR name the
+// checkouts, and by default sibling clones next to this repository
+// (../go-tangra-auth, ../go-tangra-portal) are used.
+func serviceDir(t *testing.T, name string) string {
+	t.Helper()
+	c, ok := serviceCheckouts[name]
+	if !ok {
+		t.Fatalf("unknown service %q", name)
+	}
+	dir := os.Getenv(c.env)
+	if dir == "" {
+		dir = "../../../" + c.repo
+	}
+	dir = abs(t, dir)
+	if _, err := os.Stat(filepath.Join(dir, "cmd", c.cmd)); err != nil {
+		t.Fatalf("%s checkout not found at %s (clone github.com/go-tangra/%s there or set %s): %v", name, dir, c.repo, c.env, err)
+	}
+	return dir
 }
 
 func abs(t *testing.T, p string) string {
