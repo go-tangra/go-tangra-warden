@@ -123,7 +123,7 @@ func TestAccess(t *testing.T) {
 		t.Fatal("revocation not enforced on the next request")
 	}
 	// A role grant held through an auth group: ops group → role "ops"; member "grouped" joins the group.
-	code, role := owner.JSON(http.MethodPost, "/api/v1/admin/roles", map[string]any{"slug": "ops", "display_name": "Ops", "permissions": []string{"secrets:read"}})
+	code, role := owner.JSON(http.MethodPost, "/api/v1/admin/roles", map[string]any{"slug": "ops", "display_name": "Ops", "permissions": []string{"warden:secrets:read"}})
 	if code != 201 {
 		t.Fatalf("role → %d %v", code, role)
 	}

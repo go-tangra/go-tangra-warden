@@ -13,6 +13,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
 	"github.com/go-tangra/go-tangra-portal/sdk/v4/pkg/gatewayclient"
 	"github.com/go-tangra/go-tangra-warden/v4/api/openapi"
 )
@@ -57,6 +58,25 @@ var Grants = map[string][]string{
 	"member":   {"secrets:read", "secrets:write", "secrets:share", "folders:manage", "permissions:manage"},
 	"auditor":  {"stats:read"},
 	"operator": {"stats:read"},
+}
+
+// Roles are the module roles auth provides in every tenant (feature 019,
+// research D9); administrators assign them or clone them into custom roles.
+// Resource-level grants inside warden still apply on top of them.
+var Roles = []authclient.ModuleRole{
+	{Slug: "administrator", DisplayName: DisplayName + " administrator", Description: "Every warden permission, including transfer, backups and statistics", Permissions: PermissionRefs()},
+	{Slug: "editor", DisplayName: DisplayName + " editor", Description: "Read, write and share granted secrets; manage folders and access grants", Permissions: []string{"secrets:read", "secrets:write", "secrets:share", "folders:manage", "permissions:manage"}},
+	{Slug: "viewer", DisplayName: DisplayName + " viewer", Description: "Read the secrets the user is granted", Permissions: []string{"secrets:read"}},
+}
+
+// Registration is what warden registers with auth at start and every five
+// minutes: its permissions, module roles and built-in role grants.
+func Registration() authclient.Registration {
+	perms := make([]authclient.Permission, 0, len(Permissions))
+	for _, p := range Permissions {
+		perms = append(perms, authclient.Permission{Resource: p.Resource, Action: p.Action, Description: p.Description})
+	}
+	return authclient.Registration{Module: Module, DisplayName: DisplayName, Permissions: perms, Roles: Roles, BuiltinGrants: Grants}
 }
 
 // Methods are the gRPC methods exposed through the gateway.
