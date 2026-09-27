@@ -14,3 +14,12 @@ rules:
     to: ["warden"]
     operations: ["/warden.v1.Secrets/GetPassword"]
     effect: allow
+  # ipam fetches a device's BMC credentials on behalf of the signed-in user
+  # (ipam feature 024): metadata to validate/show the reference, the password
+  # right before a power, sensor or KVM action. The call carries the user's
+  # platform token and passes warden's per-secret check and audit.
+  - id: ipam-bmc-secrets
+    from: ["spiffe://example.org/svc/ipam"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/Get", "/warden.v1.Secrets/GetPassword"]
+    effect: allow
