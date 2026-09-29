@@ -23,3 +23,13 @@ rules:
     to: ["warden"]
     operations: ["/warden.v1.Secrets/Get", "/warden.v1.Secrets/GetPassword"]
     effect: allow
+  # signing reads the time-stamp authority credentials of administrator
+  # document signing on behalf of the signed-in user (signing feature 027):
+  # metadata for the TSA address, the password right before the time-stamp
+  # request. The call carries the user's platform token and passes warden's
+  # per-secret check and audit.
+  - id: signing-tsa-secrets
+    from: ["spiffe://example.org/svc/signing"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/Get", "/warden.v1.Secrets/GetPassword"]
+    effect: allow
