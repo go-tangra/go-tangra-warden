@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/secrets"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // RegisterSecrets mounts the secret routes (contracts §secrets).
@@ -21,13 +24,13 @@ func (s *Server) RegisterSecrets(d StoryDeps) {
 		if f := q.Get("folder_id"); f != "" {
 			folder = &f
 		}
-		limit, _ := strconv.Atoi(q.Get("limit"))
-		page, err := d.Secrets.List(r.Context(), subj, folder, q.Get("cursor"), limit)
-		if err != nil {
-			Fail(w, r, s.rt.Logger(), domainError(err))
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
+		serveList(s, w, r, store.SecretList, domainError, func() (map[string]any, error) {
+			limit, _ := strconv.Atoi(q.Get("limit"))
+			page, err := d.Secrets.List(r.Context(), subj, folder, q.Get("cursor"), limit)
+			return legacyPage(page.Items, "next", page.Next), err
+		}, func(req listquery.Request) (listquery.Page[secrets.View], error) {
+			return d.Secrets.ListPage(r.Context(), subj, folder, req)
+		})
 	})
 	s.MustHandle("POST", "/api/warden/v1/secrets", func(w http.ResponseWriter, r *http.Request) {
 		subj, err := subjects(r)
@@ -63,13 +66,13 @@ func (s *Server) RegisterSecrets(d StoryDeps) {
 			return
 		}
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
-		page, err := d.Secrets.Search(r.Context(), subj, q.Get("q"), q.Get("cursor"), limit)
-		if err != nil {
-			Fail(w, r, s.rt.Logger(), domainError(err))
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
+		serveList(s, w, r, store.SecretSearchList, domainError, func() (map[string]any, error) {
+			limit, _ := strconv.Atoi(q.Get("limit"))
+			page, err := d.Secrets.Search(r.Context(), subj, q.Get("q"), q.Get("cursor"), limit)
+			return legacyPage(page.Items, "next", page.Next), err
+		}, func(req listquery.Request) (listquery.Page[secrets.View], error) {
+			return d.Secrets.SearchPage(r.Context(), subj, q.Get("q"), req)
+		})
 	})
 	s.MustHandle("GET", "/api/warden/v1/secrets/{id}", func(w http.ResponseWriter, r *http.Request) {
 		subj, err := subjects(r)
