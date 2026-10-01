@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
+	"github.com/go-tangra/go-tangra/v4/listquery"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,6 +19,16 @@ func (d DBQuerier) QueryAudit(ctx context.Context, tid, et, actor string, from, 
 	err = d.St.Tx(ctx, store.Scope{TenantID: tid}, func(tx pgx.Tx) error {
 		out, err = store.QueryAudit(ctx, tx, tid, et, actor, from, to, cursor, limit)
 		return err
+	})
+	return
+}
+
+// PageAudit implements audit.Querier.
+func (d DBQuerier) PageAudit(ctx context.Context, tid string, f store.AuditQuery, req listquery.Request) (out []store.AuditRow, total int, applied listquery.Request, err error) {
+	err = d.St.Tx(ctx, store.Scope{TenantID: tid}, func(tx pgx.Tx) error {
+		var e error
+		out, total, applied, e = store.PageAudit(ctx, tx, tid, f, req)
+		return e
 	})
 	return
 }

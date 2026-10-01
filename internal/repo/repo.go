@@ -8,6 +8,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
@@ -33,6 +35,10 @@ type Secrets interface {
 	SecretsInFolders(ctx context.Context, tenantID string, folderIDs []string) ([]store.Secret, error)
 	AllSecrets(ctx context.Context, tenantID string, limit int) ([]store.Secret, error)
 	SearchSecrets(ctx context.Context, tenantID, q string, secretIDs, folderIDs []string, includeRoot bool, limit int) ([]store.Secret, error)
+	// PageSecretsInFolder / PageSearchSecrets are the list-contract pages:
+	// the scope is applied to the count and the page (store.SecretScope).
+	PageSecretsInFolder(ctx context.Context, tenantID string, folderID *string, scope store.SecretScope, req listquery.Request) ([]store.Secret, int, listquery.Request, error)
+	PageSearchSecrets(ctx context.Context, tenantID, q string, scope store.SecretScope, req listquery.Request) ([]store.Secret, int, listquery.Request, error)
 	UpdateSecret(ctx context.Context, s store.Secret) error
 	SetSecretVersion(ctx context.Context, tenantID, id string, version int, updatedBy *string) error
 	SetSecretTOTP(ctx context.Context, tenantID, id string, has bool, updatedBy *string) error
@@ -63,6 +69,7 @@ type Shares interface {
 	ShareByTokenHash(ctx context.Context, hash string) (store.Share, error) // system scope
 	GetShare(ctx context.Context, tenantID, id string) (store.Share, error)
 	SharesOfSecret(ctx context.Context, tenantID, secretID, createdBy string) ([]store.Share, error)
+	PageSharesOfSecret(ctx context.Context, tenantID, secretID, createdBy string, req listquery.Request) ([]store.Share, int, listquery.Request, error)
 	ConsumeShareOpen(ctx context.Context, id string) (store.Share, error) // system scope
 	SetShareState(ctx context.Context, tenantID, id, state string) error
 	ExpireShares(ctx context.Context, now time.Time) (int64, error) // system scope
@@ -72,6 +79,7 @@ type Shares interface {
 type Audit interface {
 	InsertAuditRows(ctx context.Context, rows []store.AuditRow) error
 	QueryAudit(ctx context.Context, tenantID, eventType, actorID string, from, to, cursor time.Time, limit int) ([]store.AuditRow, error)
+	PageAudit(ctx context.Context, tenantID string, f store.AuditQuery, req listquery.Request) ([]store.AuditRow, int, listquery.Request, error)
 }
 
 // Stats reads the per-tenant counts.

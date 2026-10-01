@@ -51,6 +51,15 @@
   own strongest relation; listing grants requires `share`; effective
   permissions are always readable (they describe the caller). Every refusal is
   audited (`access_refused` with the permission).
+- Lists are paged and sorted on the server (page, page_size, sort, order;
+  feature 032). Visibility is applied in SQL to the count and the page
+  alike: the caller's unexpired grants (user, roles, tenant) give the
+  directly granted secrets and the granted folders, whose subtrees match
+  through `ancestors`; a folder view still requires `read` on the folder.
+  Totals are exact and never count a secret the caller cannot read. Sort
+  fields are a closed allow-list of metadata columns (no material, vault
+  path or metadata); an invalid list parameter is 422 naming the parameter
+  only. The audit trail defaults to the last 7 days without `from`.
 - The gateway enforces the API permission of each route first
   (`secrets:read` … `stats:read`, seeded to built-in roles by warden itself).
 
@@ -93,3 +102,4 @@
 | T11 weak generated passwords | crypto/rand, rejection sampling, class guarantee | generator tests, `FuzzGenerator` |
 | T12 forged platform tokens / spoofed gateway headers | authclient verification, `X-Gateway-*` stripped by the gateway | httpapi `TestDeclaredRoutesMountedAndAuthenticated`, gateway `TestDispatchClientAddress`, `TestShare` spoof case |
 | T13 contract drift | every declared route must have a handler; manifest built from the document | `CheckRoutes` at start, contract tests |
+| T14 hidden secrets counted or listed through paging | visibility in SQL for count and page, constant ORDER BY allow-list | httpapi `TestSecretListsVisibilityAndTotals`, `TestListParamRefusals`, integration `TestLists` |

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAbility } from '@casl/vue'
-import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
+import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, useListQuery, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
 import { useZodForm, zodToFields } from '@go-tangra/ui/forms'
 import { describe } from '@/api/client'
 import type { Folder, FolderNode, Secret } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'
+import { AUDIT_LIST, SEARCH_LIST, SECRET_LIST } from '@/stores/paged'
 import { useFolders } from '@/stores/folders'
 import { useOps } from '@/stores/ops'
 import { useDirectory } from '@/stores/directory'
@@ -48,8 +49,26 @@ const crumbs = computed(() => {
   for (let f = currentFolder.value; f; f = f.parent_id ? folders.find(f.parent_id)?.folder : undefined) out.unshift({ id: f.id, name: f.name })
   return out
 })
+// --- server paging and sorting (go-tangra specs/032-server-side-tables): the
+// folder view and search results each keep page / size / sort in the URL
+// (?secrets.page=…, ?search.page=…); folders are listed first, unpaged.
+const lq = useListQuery('secrets', SECRET_LIST.opts)
+const lqs = useListQuery('search', SEARCH_LIST.opts)
+const active = computed(() => (secrets.query ? lqs : lq))
+async function load(): Promise<void> {
+  const searching = !!secrets.query
+  const res = searching ? await secrets.search(secrets.query, lqs.query.value) : await secrets.list(selected.value, lq.query.value)
+  if (res?.page) (searching ? lqs : lq).clampTo(res.page) // a page beyond the end answers the last page
+}
+watch(lq.query, () => { if (!secrets.query) void load() })
+watch(lqs.query, () => { if (secrets.query) void load() })
+/** The folder or search text changed: back to page 1 (which reloads), or reload in place. */
+async function restart(q: typeof lq): Promise<void> {
+  if (q.page.value !== 1) q.resetPage()
+  else await load()
+}
 onMounted(async () => {
-  await Promise.all([folders.load(), secrets.list(null)])
+  await Promise.all([folders.load(), secrets.list(null, lq.query.value)])
   if (canStats.value) void ops.loadStats()
 })
 
@@ -62,26 +81,38 @@ async function select(id: string | null): Promise<void> {
   selected.value = id
   search.reset({ q: '' })
   folderError.value = ''
-  await secrets.list(id)
+  secrets.query = ''
+  await restart(lq)
 }
 async function folderChanged(text: string): Promise<void> {
   toast.success(text)
   folderError.value = ''
-  await Promise.all([folders.load(), secrets.list(selected.value)])
+  await Promise.all([folders.load(), secrets.refresh()])
 }
-const search = useZodForm(searchSchema, { initial: { q: '' }, onSubmit: (v) => (v.q ? secrets.search(v.q) : secrets.list(selected.value)) })
+const search = useZodForm(searchSchema, {
+  initial: { q: '' },
+  onSubmit: async (v) => {
+    secrets.query = v.q ?? ''
+    await restart(v.q ? lqs : lq)
+  },
+})
 
-// --- rows: folders first, then secrets (one table, stacked cards below md) ---
-type Row = Record<string, unknown> & { id: string; kind: 'folder' | 'secret'; name: string; username: string; host_url: string; folder_path: string; version: string; folder?: Folder; secret?: Secret }
-const rows = computed<Row[]>(() => [
-  ...(secrets.query ? [] : childFolders.value.map((f): Row => ({ id: 'f:' + f.id, kind: 'folder', name: f.name, username: f.secret_count + ' secret(s)', host_url: '', folder_path: '', version: '', folder: f }))),
-  ...secrets.items.map((s): Row => ({ id: s.id, kind: 'secret', name: s.name, username: s.username, host_url: s.host_url, folder_path: s.folder_path || '/', version: String(s.current_version), secret: s })),
-])
-const columns: Column<Row>[] = [
+// --- folders first (unpaged), then one server page of secrets (stacked cards below md) ---
+type Row = Record<string, unknown> & { id: string; kind: 'folder' | 'secret'; name: string; username: string; host_url: string; folder_path: string; version: string; updated_at: string; folder?: Folder; secret?: Secret }
+const folderRows = computed<Row[]>(() => (secrets.query ? [] : childFolders.value.map((f): Row => ({ id: 'f:' + f.id, kind: 'folder', name: f.name, username: f.secret_count + ' secret(s)', host_url: '', folder_path: '', version: '', updated_at: f.updated_at, folder: f }))))
+const rows = computed<Row[]>(() => secrets.items.map((s): Row => ({ id: s.id, kind: 'secret', name: s.name, username: s.username, host_url: s.host_url, folder_path: s.folder_path || '/', version: String(s.current_version), updated_at: s.updated_at, secret: s })))
+// An empty folder that has subfolders shows only the folders.
+const showSecrets = computed(() => !!secrets.query || secrets.total > 0 || secrets.loading || folderRows.value.length === 0)
+const folderColumns: Column<Row>[] = [
   { key: 'name', label: 'Name' },
+  { key: 'username', label: 'Contents' },
+]
+const columns: Column<Row>[] = [
+  { key: 'name', label: 'Name', sortable: true },
   { key: 'username', label: 'Username' },
   { key: 'host_url', label: 'Host', hideOnStack: true },
   { key: 'folder_path', label: 'Folder', hideOnStack: true },
+  { key: 'updated_at', label: 'Updated', sortable: true, defaultDir: 'desc', hideOnStack: true, format: (r) => new Date(r.updated_at).toLocaleDateString() },
   { key: 'version', label: 'Version', width: 'sm', align: 'end' },
 ]
 function onRow(r: Row): void {
@@ -181,12 +212,23 @@ async function imported(r: TransferReport): Promise<void> {
 }
 const errorText = computed(() => (secrets.error ? describe(new Error(secrets.error)) : ''))
 
-// --- statistics + audit (Stats ability) ---
+// --- statistics + audit (Stats ability): server pages, newest first; without
+// from/to the server answers the last 7 days ---
+const lqa = useListQuery('audit', AUDIT_LIST.opts)
+type AuditQuery = { event_type?: string | undefined; actor_id?: string | undefined; from?: string | undefined; to?: string | undefined }
+const auditQuery = ref<AuditQuery>({})
+async function loadAuditPage(): Promise<void> {
+  const res = await ops.loadAudit(auditQuery.value, lqa.query.value)
+  if (res?.page) lqa.clampTo(res.page)
+  await dir.resolveUsers(ops.audit.filter((e) => e.actor_kind === 'user').map((e) => e.actor_id))
+}
+watch(lqa.query, () => { if (showAudit.value) void loadAuditPage() })
 const auditFilter = useZodForm(auditFilterSchema, {
   initial: { event_type: '', actor_id: '', from: '', to: '' },
   onSubmit: async (f) => {
-    await ops.loadAudit({ event_type: f.event_type || undefined, actor_id: f.actor_id || undefined, from: f.from, to: f.to })
-    await dir.resolveUsers(ops.audit.filter((e) => e.actor_kind === 'user').map((e) => e.actor_id))
+    auditQuery.value = { event_type: f.event_type || undefined, actor_id: f.actor_id || undefined, from: f.from, to: f.to }
+    if (lqa.page.value !== 1) lqa.resetPage()
+    else await loadAuditPage()
   },
 })
 async function toggleAudit(): Promise<void> {
@@ -195,18 +237,12 @@ async function toggleAudit(): Promise<void> {
 }
 const auditRows = computed(() => ops.audit.map((e, n) => ({ ...e, id: e.ts + ':' + n })))
 const auditColumns: Column<(typeof auditRows.value)[number]>[] = [
-  { key: 'ts', label: 'When', format: (e) => new Date(e.ts).toLocaleString() },
+  { key: 'ts', label: 'When', sortable: true, defaultDir: 'desc', format: (e) => new Date(e.ts).toLocaleString() },
   { key: 'event_type', label: 'Event' },
   { key: 'actor', label: 'Actor', format: (e) => (e.actor_kind === 'user' ? dir.userName(e.actor_id) : e.actor_kind === 'system' ? 'system' : e.actor_kind + (e.actor_id ? ' ' + e.actor_id : '')) },
   { key: 'subject', label: 'Subject', format: (e) => (e.subject_kind ? e.subject_kind + (e.subject_name ? ' ' + e.subject_name : e.subject_id ? ' ' + e.subject_id : '') : ''), hideOnStack: true },
   { key: 'outcome', label: 'Outcome', width: 'sm', format: (e) => e.outcome + (e.reason ? ' (' + e.reason + ')' : '') },
 ]
-const moreAudit = async () => {
-  const f = auditFilter.validate()
-  if (!f) return
-  await ops.loadAudit({ event_type: f.event_type || undefined, actor_id: f.actor_id || undefined, from: f.from, to: f.to }, ops.next)
-  await dir.resolveUsers(ops.audit.filter((e) => e.actor_kind === 'user').map((e) => e.actor_id))
-}
 const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.entries(ops.stats.grants ?? {}).map(([k, v]) => k + ' ' + v).join(', ') || 'none' }, { label: 'Shares', value: Object.entries(ops.stats.shares ?? {}).map(([k, v]) => k + ' ' + v).join(', ') || 'none' }] : []))
 </script>
 
@@ -240,7 +276,12 @@ const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.
           </UiForm>
         </div>
         <p v-if="secrets.query" class="px-4 pt-3 text-xs text-base-content/70" data-test="search-results">Results for “{{ secrets.query }}”</p>
-        <UiDataTable :items="rows" :columns="columns" :loading="secrets.loading || folders.loading" caption="Folder contents" :empty-title="secrets.query ? 'No secrets match' : 'This folder is empty'" clickable :has-more="!!secrets.next" :row-attrs="(r) => ({ 'data-test': r.kind === 'folder' ? 'folder-row' : 'secret-row' })" @row-click="onRow" @load-more="secrets.more()">
+        <UiDataTable v-if="folderRows.length" :items="folderRows" :columns="folderColumns" :loading="folders.loading" caption="Folders" clickable :row-attrs="() => ({ 'data-test': 'folder-row' })" data-test="folder-table" @row-click="onRow">
+          <template #cell-name="{ row }">
+            <span class="inline-flex items-center gap-1"><UiIcon name="mdi-folder" size="sm" class="text-warning" /><span>{{ row.name }}</span></span>
+          </template>
+        </UiDataTable>
+        <UiDataTable v-if="showSecrets" :items="rows" :columns="columns" :loading="secrets.loading" :total="secrets.total" :page="active.page.value" :page-size="active.pageSize.value" :sort="active.sort.value" :caption="secrets.query ? 'Search results' : 'Secrets'" :empty-title="secrets.query ? 'No secrets match' : 'This folder is empty'" clickable :row-attrs="() => ({ 'data-test': 'secret-row' })" data-test="secret-table" @row-click="onRow" @update:page="active.setPage" @update:page-size="active.setPageSize" @update:sort="active.setSort">
           <template #cell-name="{ row }">
             <span class="inline-flex items-center gap-1">
               <UiIcon :name="row.kind === 'folder' ? 'mdi-folder' : 'mdi-key-variant'" size="sm" :class="row.kind === 'folder' ? 'text-warning' : 'text-primary'" />
@@ -272,7 +313,8 @@ const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.
             <div class="col-span-2 md:col-span-2"><UiButton type="submit" block size="sm" data-test="audit-apply">Apply</UiButton></div>
           </div>
         </UiForm>
-        <UiDataTable :items="auditRows" :columns="auditColumns" caption="Audit events" empty-title="No events" :has-more="!!ops.next" :row-attrs="() => ({ 'data-test': 'audit-row' })" @load-more="moreAudit" />
+        <UiDataTable :items="auditRows" :columns="auditColumns" :loading="ops.auditLoading" :total="ops.auditTotal" :page="lqa.page.value" :page-size="lqa.pageSize.value" :sort="lqa.sort.value" caption="Audit events" empty-title="No events in this period" :row-attrs="() => ({ 'data-test': 'audit-row' })" @update:page="lqa.setPage" @update:page-size="lqa.setPageSize" @update:sort="lqa.setSort" />
+        <p class="mt-2 text-xs text-base-content/70" data-test="audit-window">Without a from date the last 7 days are shown.</p>
       </UiCard>
     </template>
 

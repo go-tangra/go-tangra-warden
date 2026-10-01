@@ -16,9 +16,35 @@ components:
     csrf: { name: X-CSRF-Token, in: header, required: false, schema: { type: string } }
     id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
     cursor: { name: cursor, in: query, schema: { type: string } }
-    limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    limit: { name: limit, in: query, description: 'legacy cursor paging (one release); not combinable with page/page_size/sort/order', schema: { type: integer, minimum: 1, maximum: 100 } }
+    # List contract (go-tangra specs/032-server-side-tables): an invalid value is 422 validation_failed {detail: {param}}.
+    page: { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 2147483647 } }
+    pageSize: { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+    order: { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
   schemas:
-    Error: { type: object, required: [reason], properties: { reason: { type: string } } }
+    Error: { type: object, required: [reason], properties: { reason: { type: string }, detail: { type: object, properties: { param: { type: string } } } } }
+    PageMeta:
+      type: object
+      description: 'list-contract page: items (at most page_size) plus the exact total of records matching the filters and visible to the caller; page is the page returned (a page beyond the end answers the last page)'
+      required: [items, total, page, page_size, sort, order]
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+        sort: { type: string }
+        order: { type: string, enum: [asc, desc] }
+    SecretPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Secret' } } } }
+    SharePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Share' } } } }
+    AuditPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - { type: object, properties: { items: { type: array, items: { type: object } } } }
     Name: { type: string, minLength: 1, maxLength: 200, pattern: '^[^\p{Cc}]+$' }
     Folder:
       type: object
@@ -197,8 +223,9 @@ paths:
     get:
       operationId: listSecrets
       x-freya-permission: secrets:read
-      parameters: [{ name: folder_id, in: query, schema: { type: string, format: uuid } }, { name: root, in: query, schema: { type: boolean } }, { $ref: '#/components/parameters/cursor' }, { $ref: '#/components/parameters/limit' }]
-      responses: { '200': { description: 'items: Secret[], next' } }
+      parameters: [{ name: folder_id, in: query, schema: { type: string, format: uuid } }, { name: root, in: query, schema: { type: boolean } }, { $ref: '#/components/parameters/page' }, { $ref: '#/components/parameters/pageSize' }, { name: sort, in: query, schema: { type: string, enum: [name, updated_at, created_at] } }, { $ref: '#/components/parameters/order' }, { $ref: '#/components/parameters/cursor' }, { $ref: '#/components/parameters/limit' }]
+      description: 'secrets of a folder (root when folder_id is omitted) the caller may read: under a readable folder all of them, at the root those granted directly; visibility applies to the total too. Default sort name asc. With only cursor/limit (legacy, one release): {items, next, total}.'
+      responses: { '200': { description: 'page of secrets without material', content: { application/json: { schema: { $ref: '#/components/schemas/SecretPage' } } } }, '422': { description: 'validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
     post:
       operationId: createSecret
       x-freya-permission: secrets:write
@@ -209,8 +236,9 @@ paths:
     get:
       operationId: searchSecrets
       x-freya-permission: secrets:read
-      parameters: [{ name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }, { $ref: '#/components/parameters/cursor' }, { $ref: '#/components/parameters/limit' }]
-      responses: { '200': { description: 'readable matches, no material' } }
+      parameters: [{ name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }, { $ref: '#/components/parameters/page' }, { $ref: '#/components/parameters/pageSize' }, { name: sort, in: query, schema: { type: string, enum: [relevance, name, updated_at] } }, { $ref: '#/components/parameters/order' }, { $ref: '#/components/parameters/cursor' }, { $ref: '#/components/parameters/limit' }]
+      description: 'readable matches of name, username, host, description or folder path (material is never searched); default sort relevance desc (name matches first, then name order). With only cursor/limit (legacy, one release): {items, next, total}.'
+      responses: { '200': { description: 'page of readable matches, no material', content: { application/json: { schema: { $ref: '#/components/schemas/SecretPage' } } } }, '422': { description: 'validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
   /api/warden/v1/secrets/{id}:
     get: { operationId: getSecret, x-freya-permission: secrets:read, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { description: 'secret without material' }, '404': { description: not_found } } }
     put:
@@ -326,7 +354,11 @@ paths:
       responses: { '200': { description: 'results per entity (created, skipped, failed) and warnings' } }
   # ---- shares ----------------------------------------------------------------
   /api/warden/v1/secrets/{id}/shares:
-    get: { operationId: listShares, x-freya-permission: secrets:share, parameters: [{ $ref: '#/components/parameters/id' }], responses: { '200': { description: 'Share[] created by the caller' } } }
+    get:
+      operationId: listShares
+      x-freya-permission: secrets:share
+      parameters: [{ $ref: '#/components/parameters/id' }, { $ref: '#/components/parameters/page' }, { $ref: '#/components/parameters/pageSize' }, { name: sort, in: query, schema: { type: string, enum: [created_at, expires_at] } }, { $ref: '#/components/parameters/order' }]
+      responses: { '200': { description: 'page of the shares created by the caller (default created_at desc)', content: { application/json: { schema: { $ref: '#/components/schemas/SharePage' } } } }, '422': { description: 'validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
     post:
       operationId: createShare
       x-freya-permission: secrets:share
@@ -358,7 +390,8 @@ paths:
     get:
       operationId: auditTrail
       x-freya-permission: stats:read
-      parameters: [{ name: event_type, in: query, schema: { type: string } }, { name: actor_id, in: query, schema: { type: string } }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } }, { $ref: '#/components/parameters/cursor' }]
-      responses: { '200': { description: 'page of audit events (details never carry material; subject_name resolves secrets and folders that still exist)' } }
+      parameters: [{ name: event_type, in: query, schema: { type: string } }, { name: actor_id, in: query, schema: { type: string } }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } }, { $ref: '#/components/parameters/page' }, { $ref: '#/components/parameters/pageSize' }, { name: sort, in: query, schema: { type: string, enum: [ts] } }, { $ref: '#/components/parameters/order' }, { $ref: '#/components/parameters/cursor' }]
+      description: 'events newest first within [from, to]; without from the window is the 7 days before to (default now), and the total counts that window exactly. With only cursor (legacy, one release): {items, next_cursor, total}.'
+      responses: { '200': { description: 'page of audit events (details never carry material; subject_name resolves secrets and folders that still exist)', content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } } }, '422': { description: 'validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
   /api/warden/v1/health:
     get: { operationId: health, x-freya-permission: stats:read, responses: { '200': { description: 'database, vault (ok|sealed|unreachable|unauthenticated), version' } } }

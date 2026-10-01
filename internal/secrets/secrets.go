@@ -17,6 +17,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/repo"
@@ -381,6 +383,105 @@ func (s *Service) List(ctx context.Context, subj authz.Subjects, folderID *strin
 		}
 	}
 	return page, nil
+}
+
+// scope reads the caller's grants once (user, roles, tenant; unexpired) and
+// returns what they may read (direct secret grants and granted folders, whose
+// subtrees the page queries expand in SQL) with the permissions held through
+// direct grants on secrets (row decoration).
+func (s *Service) scope(ctx context.Context, subj authz.Subjects) (store.SecretScope, map[string]authz.Permissions, error) {
+	grants, err := s.st.GrantsForSubjects(ctx, subj.TenantID, subj.UserID, subj.Roles, s.now())
+	if err != nil {
+		return store.SecretScope{}, nil, err
+	}
+	var sc store.SecretScope
+	direct := map[string]authz.Permissions{}
+	seen := map[string]bool{}
+	for _, g := range grants { // every relation carries read
+		switch g.ResourceType {
+		case authz.Secret:
+			if _, ok := direct[g.ResourceID]; !ok {
+				sc.SecretIDs = append(sc.SecretIDs, g.ResourceID)
+			}
+			direct[g.ResourceID] = union(direct[g.ResourceID], authz.Of(g.Relation))
+		case authz.Folder:
+			if !seen[g.ResourceID] {
+				seen[g.ResourceID] = true
+				sc.FolderIDs = append(sc.FolderIDs, g.ResourceID)
+			}
+		}
+	}
+	return sc, direct, nil
+}
+
+// ListPage is one list-contract page of the secrets of a folder (root when
+// nil). A folder must be readable (refusals are audited as before); the
+// caller's visibility is applied in SQL to the count and the page, so the
+// total is exact and a secret the caller cannot read is neither counted nor
+// returned. Under a readable folder every secret is readable; at the root
+// only secrets granted directly are.
+func (s *Service) ListPage(ctx context.Context, subj authz.Subjects, folderID *string, req listquery.Request) (listquery.Page[View], error) {
+	var inherited *authz.Permissions
+	if folderID != nil {
+		d, err := s.az.Require(ctx, subj, authz.Folder, *folderID, authz.Read)
+		if err != nil {
+			return listquery.Page[View]{}, err
+		}
+		inherited = &d.Permissions
+	}
+	sc, direct, err := s.scope(ctx, subj)
+	if err != nil {
+		return listquery.Page[View]{}, err
+	}
+	rows, total, applied, err := s.st.PageSecretsInFolder(ctx, subj.TenantID, folderID, sc, req)
+	if err != nil {
+		return listquery.Page[View]{}, err
+	}
+	items := make([]View, 0, len(rows))
+	for _, sec := range rows {
+		p := direct[sec.ID]
+		if inherited != nil {
+			p = union(p, *inherited)
+		}
+		if !p.Read { // never with a consistent scope; fail closed on the row
+			continue
+		}
+		items = append(items, view(sec, p))
+	}
+	return listquery.NewPage(items, total, applied), nil
+}
+
+// SearchPage is one list-contract page of the readable secrets matching q
+// (name, username, host, description or folder path; material is never
+// searched), relevance first by default. Visibility is applied in SQL to the
+// count and the page.
+func (s *Service) SearchPage(ctx context.Context, subj authz.Subjects, q string, req listquery.Request) (listquery.Page[View], error) {
+	q = strings.TrimSpace(q)
+	if q == "" || len(q) > SearchMax {
+		return listquery.Page[View]{}, ErrInvalid
+	}
+	sc, direct, err := s.scope(ctx, subj)
+	if err != nil {
+		return listquery.Page[View]{}, err
+	}
+	rows, total, applied, err := s.st.PageSearchSecrets(ctx, subj.TenantID, q, sc, req)
+	if err != nil {
+		return listquery.Page[View]{}, err
+	}
+	folderCache := map[string]authz.Permissions{}
+	items := make([]View, 0, len(rows))
+	for _, sec := range rows {
+		fp, err := s.folderPermissions(ctx, subj, folderCache, sec.FolderID)
+		if err != nil {
+			return listquery.Page[View]{}, err
+		}
+		p := union(direct[sec.ID], fp)
+		if !p.Read { // never with a consistent scope; fail closed on the row
+			continue
+		}
+		items = append(items, view(sec, p))
+	}
+	return listquery.NewPage(items, total, applied), nil
 }
 
 // directSecretPermissions maps secret ids to the permissions the subjects

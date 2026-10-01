@@ -7,12 +7,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // Querier reads the audit hypertable (database or in-memory).
 type Querier interface {
 	QueryAudit(ctx context.Context, tenantID, eventType, actorID string, from, to, cursor time.Time, limit int) ([]store.AuditRow, error)
+	PageAudit(ctx context.Context, tenantID string, f store.AuditQuery, req listquery.Request) ([]store.AuditRow, int, listquery.Request, error)
 }
 
 // Filter selects events; zero values mean "any".
@@ -81,12 +84,54 @@ func Query(ctx context.Context, q Querier, tenantID string, f Filter) (Page, err
 			page.NextCursor = strconv.FormatInt(rows[i-1].TS.UnixNano(), 10)
 			break
 		}
-		details := r.Details
-		if len(details) == 0 {
-			details = json.RawMessage("{}")
-		}
-		page.Items = append(page.Items, Item{TS: r.TS, EventType: r.EventType, ActorKind: r.ActorKind, ActorID: r.ActorID, SubjectKind: r.SubjectKind,
-			SubjectID: r.SubjectID, SubjectName: r.SubjectName, Outcome: r.Outcome, Reason: r.Reason, CorrelationID: r.CorrelationID, Details: details})
+		page.Items = append(page.Items, item(r))
 	}
 	return page, nil
+}
+
+func item(r store.AuditRow) Item {
+	details := r.Details
+	if len(details) == 0 {
+		details = json.RawMessage("{}")
+	}
+	return Item{TS: r.TS, EventType: r.EventType, ActorKind: r.ActorKind, ActorID: r.ActorID, SubjectKind: r.SubjectKind,
+		SubjectID: r.SubjectID, SubjectName: r.SubjectName, Outcome: r.Outcome, Reason: r.Reason, CorrelationID: r.CorrelationID, Details: details}
+}
+
+// Window resolves the time window of a page: an absent to is now, an absent
+// from is store.AuditWindow before to (research D6: exact counts over a
+// bounded slice of the hypertable).
+func Window(from, to, now time.Time) (time.Time, time.Time) {
+	if to.IsZero() {
+		to = now.Add(time.Minute)
+	}
+	if from.IsZero() {
+		from = to.Add(-store.AuditWindow)
+	}
+	return from, to
+}
+
+// QueryPage is one list-contract page of a tenant's events (newest first by
+// default) within the filter's window (Window). The cursor and limit of the
+// filter are ignored.
+func QueryPage(ctx context.Context, q Querier, tenantID string, f Filter, req listquery.Request, now time.Time) (listquery.Page[Item], error) {
+	if f.EventType != "" && !Known(f.EventType) {
+		return listquery.Page[Item]{}, ErrFilter
+	}
+	if !f.From.IsZero() && !f.To.IsZero() && f.To.Before(f.From) {
+		return listquery.Page[Item]{}, ErrFilter
+	}
+	from, to := Window(f.From, f.To, now)
+	if to.Before(from) {
+		return listquery.Page[Item]{}, ErrFilter
+	}
+	rows, total, applied, err := q.PageAudit(ctx, tenantID, store.AuditQuery{EventType: f.EventType, ActorID: f.ActorID, From: from, To: to}, req)
+	if err != nil {
+		return listquery.Page[Item]{}, err
+	}
+	items := make([]Item, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, item(r))
+	}
+	return listquery.NewPage(items, total, applied), nil
 }

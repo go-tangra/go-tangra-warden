@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/generator"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/stats"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/vault"
 )
 
@@ -97,16 +100,20 @@ func (s *Server) RegisterOps(d OpsDeps) {
 		if v := q.Get("to"); v != "" {
 			f.To, _ = time.Parse(time.RFC3339, v)
 		}
-		page, err := audit.Query(r.Context(), d.Audit, subj.TenantID, f)
-		if err != nil {
+		auditErr := func(err error) error {
 			if errors.Is(err, audit.ErrFilter) {
-				Fail(w, r, nil, ErrValidation)
-				return
+				return ErrValidation
 			}
-			Fail(w, r, s.rt.Logger(), err)
-			return
+			return err
 		}
-		WriteJSON(w, http.StatusOK, page)
+		serveList(s, w, r, store.AuditList, auditErr, func() (map[string]any, error) {
+			page, err := audit.Query(r.Context(), d.Audit, subj.TenantID, f)
+			return legacyPage(page.Items, "next_cursor", page.NextCursor), err
+		}, func(req listquery.Request) (listquery.Page[audit.Item], error) {
+			// The legacy total counts the same bounded window as a page (the
+			// default 7 days without from): never an unbounded count.
+			return audit.QueryPage(r.Context(), d.Audit, subj.TenantID, f, req, time.Now())
+		})
 	})
 	s.MustHandle("GET", "/api/warden/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := subjects(r); err != nil {

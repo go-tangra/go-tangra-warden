@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/cache"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/share"
+	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
 )
 
 // ShareDeps are the services behind the share routes.
@@ -89,12 +92,9 @@ func (s *Server) RegisterShares(d ShareDeps) {
 			Fail(w, r, nil, err)
 			return
 		}
-		out, err := d.Shares.List(r.Context(), subj, r.PathValue("id"))
-		if err != nil {
-			Fail(w, r, s.rt.Logger(), shareError(err))
-			return
-		}
-		WriteJSON(w, http.StatusOK, map[string]any{"items": out})
+		serveList(s, w, r, store.ShareList, shareError, nil, func(req listquery.Request) (listquery.Page[share.View], error) {
+			return d.Shares.ListPage(r.Context(), subj, r.PathValue("id"), req)
+		})
 	})
 	s.MustHandle("POST", "/api/warden/v1/secrets/{id}/shares", func(w http.ResponseWriter, r *http.Request) {
 		subj, err := subjects(r)

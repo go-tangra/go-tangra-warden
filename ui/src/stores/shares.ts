@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
+import type { ListParams, Page } from '@/api/types'
+import { SHARE_LIST } from '@/stores/paged'
 
 export interface Share {
   id: string
@@ -27,15 +29,32 @@ export interface ShareInput {
 
 export const useShares = defineStore('warden-shares', () => {
   const items = ref<Share[]>([])
+  /** The caller's shares of the secret (server count). */
+  const total = ref(0)
+  const params = ref<ListParams>({ ...SHARE_LIST.first })
+  const loading = ref(false)
   const error = ref('')
+  let seq = 0
 
-  async function list(secretId: string): Promise<void> {
+  /** One page of the caller's shares of a secret (newest first by default). */
+  async function list(secretId: string, p: ListParams = params.value): Promise<void> {
+    const mine = ++seq
     error.value = ''
+    loading.value = true
+    params.value = { ...p }
     try {
-      items.value = (await api<{ items: Share[] }>('GET', 'secrets/' + secretId + '/shares')).items
+      const res = await api<Page<Share>>('GET', 'secrets/' + secretId + '/shares', undefined, { query: { ...p } })
+      if (mine !== seq) return
+      items.value = res.items ?? []
+      total.value = res.total ?? items.value.length
+      if (res.page && res.page !== p.page) params.value = { ...p, page: res.page }
     } catch (e) {
+      if (mine !== seq) return
       error.value = (e as Error).message
       items.value = []
+      total.value = 0
+    } finally {
+      if (mine === seq) loading.value = false
     }
   }
 
@@ -50,5 +69,5 @@ export const useShares = defineStore('warden-shares', () => {
     await list(secretId)
   }
 
-  return { items, error, list, create, cancel }
+  return { items, total, params, loading, error, list, create, cancel }
 })

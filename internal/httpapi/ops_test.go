@@ -100,9 +100,14 @@ func TestOpsRoutes(t *testing.T) {
 		t.Fatalf("stats db: %d %v", code, out)
 	}
 	st.ms.FailOn("TenantStats", nil)
-	st.ms.FailOn("QueryAudit", errTest)
+	st.ms.FailOn("PageAudit", errTest)
 	if code, _ := st.call(st.alice, "GET", "/api/warden/v1/audit", ""); code != 503 {
 		t.Fatal("audit db")
+	}
+	st.ms.FailOn("PageAudit", nil)
+	st.ms.FailOn("QueryAudit", errTest)
+	if code, _ := st.call(st.alice, "GET", "/api/warden/v1/audit?cursor=1", ""); code != 503 {
+		t.Fatal("legacy audit db")
 	}
 	st.ms.FailOn("QueryAudit", nil)
 }

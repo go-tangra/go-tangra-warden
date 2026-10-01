@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-tangra/go-tangra/v4/listquery"
+
 	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/store"
@@ -54,6 +56,7 @@ type Store interface {
 	ShareByTokenHash(ctx context.Context, hash string) (store.Share, error)
 	GetShare(ctx context.Context, tenantID, id string) (store.Share, error)
 	SharesOfSecret(ctx context.Context, tenantID, secretID, createdBy string) ([]store.Share, error)
+	PageSharesOfSecret(ctx context.Context, tenantID, secretID, createdBy string, req listquery.Request) ([]store.Share, int, listquery.Request, error)
 	ConsumeShareOpen(ctx context.Context, id string) (store.Share, error)
 	SetShareState(ctx context.Context, tenantID, id, state string) error
 	ExpireShares(ctx context.Context, now time.Time) (int64, error)
@@ -335,6 +338,28 @@ func (s *Service) List(ctx context.Context, subj authz.Subjects, secretID string
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// ListPage is one list-contract page of the caller's shares of a secret
+// (share on the secret is required, as for List).
+func (s *Service) ListPage(ctx context.Context, subj authz.Subjects, secretID string, req listquery.Request) (listquery.Page[View], error) {
+	if _, err := s.az.Require(ctx, subj, authz.Secret, secretID, authz.Share); err != nil {
+		return listquery.Page[View]{}, err
+	}
+	rows, total, applied, err := s.st.PageSharesOfSecret(ctx, subj.TenantID, secretID, subj.UserID, req)
+	if err != nil {
+		return listquery.Page[View]{}, err
+	}
+	out := make([]View, 0, len(rows))
+	now := s.now()
+	for _, sh := range rows {
+		v := view(sh)
+		if v.State == "active" && !sh.ExpiresAt.After(now) {
+			v.State = "expired"
+		}
+		out = append(out, v)
+	}
+	return listquery.NewPage(out, total, applied), nil
 }
 
 // Sweep marks expired shares (periodic).
