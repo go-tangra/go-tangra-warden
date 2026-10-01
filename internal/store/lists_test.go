@@ -33,7 +33,7 @@ func TestSearchOrderBy(t *testing.T) {
 		t.Fatal(got)
 	}
 	r, _ = listquery.New(0, 0, "name", "", SecretSearchList)
-	if got := SearchOrderBy(r); got != "lower(s.name) ASC NULLS LAST, s.id ASC" {
+	if got := SearchOrderBy(r); got != "lower(s.name) ASC, s.id ASC" { // NotNull: no NULLS clause
 		t.Fatal(got)
 	}
 }
@@ -47,5 +47,13 @@ func TestListRequestDefaults(t *testing.T) {
 	}
 	if got := qualify("id, tenant_id,name", "sh."); got != "sh.id, sh.tenant_id, sh.name" {
 		t.Fatal(got)
+	}
+}
+
+func TestEscapeLike(t *testing.T) {
+	for in, want := range map[string]string{"100%": `100\%`, "db_admin": `db\_admin`, `a\b`: `a\\b`, "plain": "plain"} {
+		if got := EscapeLike(in); got != want {
+			t.Errorf("%q: %q", in, got)
+		}
 	}
 }

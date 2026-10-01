@@ -14,14 +14,18 @@ import (
 // a seed or any other material, which never reaches the database anyway. The
 // memstore sorts the same public names in Go. The gRPC reads, module-to-module
 // secret reads and the backup walks keep their own order.
+//
+// NotNull marks columns declared NOT NULL in the migrations: OrderBy then
+// omits NULLS LAST, so a plain btree (migrations 0005/0006) serves both
+// directions. Search relevance is an expression and stays without it.
 var (
 	// SecretList pages GET /secrets (one folder, or the root): name order by
 	// default.
 	SecretList = listquery.Spec{
 		Fields: map[string]listquery.Field{
-			"name":       {Expr: "s.name", Text: true},
-			"updated_at": {Expr: "s.updated_at", DefaultDir: listquery.Desc},
-			"created_at": {Expr: "s.created_at", DefaultDir: listquery.Desc},
+			"name":       {Expr: "s.name", Text: true, NotNull: true},
+			"updated_at": {Expr: "s.updated_at", DefaultDir: listquery.Desc, NotNull: true},
+			"created_at": {Expr: "s.created_at", DefaultDir: listquery.Desc, NotNull: true},
 		},
 		Default: "name", TieBreak: "s.id",
 	}
@@ -30,16 +34,16 @@ var (
 	SecretSearchList = listquery.Spec{
 		Fields: map[string]listquery.Field{
 			"relevance":  {Expr: SearchRelevanceExpr, DefaultDir: listquery.Desc},
-			"name":       {Expr: "s.name", Text: true},
-			"updated_at": {Expr: "s.updated_at", DefaultDir: listquery.Desc},
+			"name":       {Expr: "s.name", Text: true, NotNull: true},
+			"updated_at": {Expr: "s.updated_at", DefaultDir: listquery.Desc, NotNull: true},
 		},
 		Default: "relevance", TieBreak: "s.id",
 	}
 	// ShareList pages GET /secrets/{id}/shares: newest first.
 	ShareList = listquery.Spec{
 		Fields: map[string]listquery.Field{
-			"created_at": {Expr: "sh.created_at", DefaultDir: listquery.Desc},
-			"expires_at": {Expr: "sh.expires_at"},
+			"created_at": {Expr: "sh.created_at", DefaultDir: listquery.Desc, NotNull: true},
+			"expires_at": {Expr: "sh.expires_at", NotNull: true},
 		},
 		Default: "created_at", TieBreak: "sh.id",
 	}
@@ -48,14 +52,14 @@ var (
 	// other column, so rows that compare equal are identical and paging
 	// still shows each event exactly once.
 	AuditList = listquery.Spec{
-		Fields:  map[string]listquery.Field{"ts": {Expr: "a.ts", DefaultDir: listquery.Desc}},
+		Fields:  map[string]listquery.Field{"ts": {Expr: "a.ts", DefaultDir: listquery.Desc, NotNull: true}},
 		Default: "ts", TieBreak: AuditTieBreak, DefaultSize: 50,
 	}
 )
 
 // SearchRelevanceExpr ranks a search hit: 1 when the name contains the query
-// ($2 of every search query), else 0.
-const SearchRelevanceExpr = "(CASE WHEN lower(s.name) LIKE '%' || lower($2) || '%' THEN 1 ELSE 0 END)"
+// ($2 of every search query, LIKE-escaped by EscapeLike), else 0.
+const SearchRelevanceExpr = "(CASE WHEN lower(s.name) LIKE '%' || lower($2) || '%' ESCAPE '\\' THEN 1 ELSE 0 END)"
 
 // AuditTieBreak orders audit events with the same timestamp.
 const AuditTieBreak = "a.event_type, a.actor_kind, a.actor_id, a.subject_kind, a.subject_id, a.outcome, a.reason, a.correlation_id, a.details::text"
