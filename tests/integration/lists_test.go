@@ -235,6 +235,7 @@ func TestLists(t *testing.T) {
 			{"/api/warden/v1/secrets?order=sideways", "order"}, {"/api/warden/v1/secrets?limit=5&page=2", "cursor"},
 			{"/api/warden/v1/secrets/search?q=r&sort=totp", "sort"}, {"/api/warden/v1/secrets/" + root[0] + "/shares?sort=token_hash", "sort"},
 			{"/api/warden/v1/audit?sort=details", "sort"}, {"/api/warden/v1/audit?cursor=1&page=1", "cursor"},
+			{"/api/warden/v1/audit?from=1970-01-01T00:00:00Z", "from"}, {"/api/warden/v1/audit?from=1970-01-01T00:00:00Z&limit=5", "from"},
 		} {
 			code, out := owner.JSON(http.MethodGet, c.path, nil)
 			d, _ := out["detail"].(map[string]any)

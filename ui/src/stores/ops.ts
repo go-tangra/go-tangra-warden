@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
+import { AUDIT_SPAN_MESSAGE } from '@/schemas/audit'
 import type { ListParams, Page } from '@/api/types'
 import { AUDIT_LIST } from '@/stores/paged'
 
@@ -95,6 +96,8 @@ export const useOps = defineStore('warden-ops', () => {
   const auditTotal = ref(0)
   const auditLoading = ref(false)
   const error = ref('')
+  /** Why the last audit page failed (a window over 90 days reads as such). */
+  const auditError = ref('')
   let auditSeq = 0
 
   async function loadStats(): Promise<void> {
@@ -114,6 +117,7 @@ export const useOps = defineStore('warden-ops', () => {
   async function loadAudit(filter: AuditFilter, p: ListParams = AUDIT_LIST.first): Promise<Page<AuditItem> | null> {
     const mine = ++auditSeq
     error.value = ''
+    auditError.value = ''
     auditLoading.value = true
     try {
       const res = await api<Page<AuditItem>>('GET', 'audit', undefined, { query: { ...filter, ...p } })
@@ -122,7 +126,10 @@ export const useOps = defineStore('warden-ops', () => {
       auditTotal.value = res.total ?? audit.value.length
       return res
     } catch (e) {
-      if (mine === auditSeq) error.value = (e as Error).message
+      if (mine === auditSeq) {
+        error.value = (e as Error).message
+        auditError.value = e instanceof ApiError && e.reason === 'validation_failed' && e.detail?.param === 'from' ? AUDIT_SPAN_MESSAGE : error.value
+      }
       return null
     } finally {
       if (mine === auditSeq) auditLoading.value = false
@@ -136,5 +143,5 @@ export const useOps = defineStore('warden-ops', () => {
     return out.password
   }
 
-  return { stats, audit, auditTotal, auditLoading, error, loadStats, loadAudit, generate }
+  return { stats, audit, auditTotal, auditLoading, error, auditError, loadStats, loadAudit, generate }
 })

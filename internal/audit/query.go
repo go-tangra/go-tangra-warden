@@ -51,7 +51,24 @@ type Page struct {
 // ErrFilter is returned for malformed filters.
 var ErrFilter = errors.New("audit: invalid filter")
 
-// Query lists events of one tenant newest first.
+// ErrSpan refuses a window wider than store.MaxAuditSpan; it names the from
+// parameter (validation_failed {param: from}) and never carries the value.
+var ErrSpan = &listquery.Error{Param: "from"}
+
+// checkSpan refuses an explicit from more than store.MaxAuditSpan before to
+// (now when absent).
+func checkSpan(from, to, now time.Time) error {
+	if to.IsZero() {
+		to = now
+	}
+	if !from.IsZero() && to.Sub(from) > store.MaxAuditSpan {
+		return ErrSpan
+	}
+	return nil
+}
+
+// Query lists events of one tenant newest first (legacy cursor path). An
+// explicit window wider than store.MaxAuditSpan is ErrSpan.
 func Query(ctx context.Context, q Querier, tenantID string, f Filter) (Page, error) {
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50
@@ -61,6 +78,9 @@ func Query(ctx context.Context, q Querier, tenantID string, f Filter) (Page, err
 	}
 	if !f.From.IsZero() && !f.To.IsZero() && f.To.Before(f.From) {
 		return Page{}, ErrFilter
+	}
+	if err := checkSpan(f.From, f.To, time.Now()); err != nil {
+		return Page{}, err
 	}
 	var cursor time.Time
 	if f.Cursor != "" {
@@ -112,14 +132,18 @@ func Window(from, to, now time.Time) (time.Time, time.Time) {
 }
 
 // QueryPage is one list-contract page of a tenant's events (newest first by
-// default) within the filter's window (Window). The cursor and limit of the
-// filter are ignored.
+// default) within the filter's window (Window); an explicit window wider than
+// store.MaxAuditSpan is ErrSpan. The cursor and limit of the filter are
+// ignored.
 func QueryPage(ctx context.Context, q Querier, tenantID string, f Filter, req listquery.Request, now time.Time) (listquery.Page[Item], error) {
 	if f.EventType != "" && !Known(f.EventType) {
 		return listquery.Page[Item]{}, ErrFilter
 	}
 	if !f.From.IsZero() && !f.To.IsZero() && f.To.Before(f.From) {
 		return listquery.Page[Item]{}, ErrFilter
+	}
+	if err := checkSpan(f.From, f.To, now); err != nil {
+		return listquery.Page[Item]{}, err
 	}
 	from, to := Window(f.From, f.To, now)
 	if to.Before(from) {

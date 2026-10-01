@@ -1811,7 +1811,9 @@ export interface operations {
             query?: {
                 event_type?: string;
                 actor_id?: string;
+                /** @description default: 7 days before to; the from..to span is at most 90 days (wider: 422 validation_failed {param: from}) */
                 from?: string;
+                /** @description default: now; to - from must not exceed 90 days */
                 to?: string;
                 page?: components["parameters"]["page"];
                 page_size?: components["parameters"]["pageSize"];

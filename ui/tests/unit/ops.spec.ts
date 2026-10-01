@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import GeneratorView from '@/views/generator/index.vue'
 import SecretsView from '@/views/secrets/index.vue'
 import { generateLocal, satisfies, useOps } from '@/stores/ops'
+import { auditFilterSchema, AUDIT_SPAN_MESSAGE } from '@/schemas'
 import { click, mountInLayout, stubFetch, type } from './helpers'
 
 const stats = { secrets: 12, secrets_with_totp: 3, folders: 4, versions: 20, grants: { owner: 5, viewer: 2 }, shares: {}, operations_24h: 77 }
@@ -150,5 +151,56 @@ describe('stats card and audit table', () => {
     expect(ops.error).toBe('temporarily_unavailable')
     await ops.loadAudit({})
     expect(ops.error).toBe('temporarily_unavailable')
+  })
+})
+
+describe('audit date range limit (90 days)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  const day = 24 * 3600 * 1000
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
+  it('the filter schema refuses a range over 90 days, naming from', () => {
+    const to = Date.parse('2026-06-30T00:00:00Z')
+    expect(auditFilterSchema.safeParse({ from: iso(to - 90 * day), to: iso(to) }).success).toBe(true)
+    const wide = auditFilterSchema.safeParse({ from: iso(to - 91 * day), to: iso(to) })
+    expect(wide.success).toBe(false)
+    expect(wide.error!.issues[0]!.path).toEqual(['from'])
+    expect(wide.error!.issues[0]!.message).toBe(AUDIT_SPAN_MESSAGE)
+    // Without to the range runs to now.
+    expect(auditFilterSchema.safeParse({ from: '1970-01-01' }).success).toBe(false)
+    expect(auditFilterSchema.safeParse({ from: iso(Date.now() - 30 * day) }).success).toBe(true)
+    // Absent from: the server's 7-day default, nothing to check.
+    expect(auditFilterSchema.safeParse({ to: '2020-01-01' }).success).toBe(true)
+    expect(auditFilterSchema.safeParse({ from: iso(to), to: iso(to - day) }).success).toBe(false)
+  })
+
+  it('a wide range is refused inline without a request; a server refusal reads as the limit', async () => {
+    const calls: string[] = []
+    stubFetch((url) => {
+      calls.push(url)
+      if (url === '/api/warden/v1/stats') return { status: 200, body: stats }
+      if (url.startsWith('/api/warden/v1/audit')) return { status: 200, body: { items: [], total: 0, page: 1, page_size: 50, sort: 'ts', order: 'desc' } }
+      return { status: 200, body: { items: [] } }
+    })
+    const a = mountInLayout(SecretsView, {})
+    await flushPromises()
+    click(document.body, '[data-test="toggle-audit"]')
+    await flushPromises()
+    const before = calls.filter((c) => c.startsWith('/api/warden/v1/audit')).length
+    type(document.body, '[data-test="audit-from"]', '1970-01-01')
+    await flushPromises()
+    click(document.body, '[data-test="audit-apply"]')
+    await flushPromises()
+    expect(document.body.textContent).toContain(AUDIT_SPAN_MESSAGE)
+    expect(calls.filter((c) => c.startsWith('/api/warden/v1/audit')).length).toBe(before)
+    a.unmount()
+
+    stubFetch(() => ({ status: 422, body: { reason: 'validation_failed', detail: { param: 'from' } } }))
+    const ops = useOps()
+    await ops.loadAudit({ from: '1970-01-01T00:00:00.000Z' })
+    expect(ops.auditError).toBe(AUDIT_SPAN_MESSAGE)
+    stubFetch(() => ({ status: 503, body: { reason: 'temporarily_unavailable' } }))
+    await ops.loadAudit({})
+    expect(ops.auditError).toBe('temporarily_unavailable')
   })
 })
