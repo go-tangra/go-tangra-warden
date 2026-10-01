@@ -15,31 +15,41 @@ const db = secret('s1', 'prod-db', { folder_id: 'f1', folder_path: '/Infra', has
 describe('secrets store', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('lists, searches, pages and never asks for material in listings', async () => {
+  it('lists and searches one server page at a time and never asks for material in listings', async () => {
     const fetch = stubFetch((url) => {
-      if (url.startsWith('/api/warden/v1/secrets/search')) return { status: 200, body: { items: [db], next: '1' } }
-      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: [db, secret('s2', 'other')], next: url.includes('cursor') ? undefined : 'c1' } }
+      const q = new URL(url, 'https://x').searchParams
+      const meta = { total: 60, page: Number(q.get('page')), page_size: Number(q.get('page_size')), sort: q.get('sort'), order: q.get('order') }
+      if (url.startsWith('/api/warden/v1/secrets/search')) return { status: 200, body: { items: [db], ...meta, total: 1 } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: [db, secret('s2', 'other')], ...meta } }
       return { status: 404, body: { reason: 'not_found' } }
     })
     const s = useSecrets()
     await s.list(null)
     expect(s.items.length).toBe(2)
-    expect(String(fetch.mock.calls[0]?.[0])).toContain('root=true')
-    await s.more()
-    expect(s.items.length).toBe(4)
-    expect(s.next).toBeUndefined()
+    expect(s.total).toBe(60)
+    expect(String(fetch.mock.calls[0]?.[0])).toBe('/api/warden/v1/secrets?root=true&page=1&page_size=25&sort=name&order=asc')
+    await s.list('f1', { page: 3, page_size: 25, sort: 'updated_at', order: 'desc' })
+    expect(String(fetch.mock.calls[1]?.[0])).toBe('/api/warden/v1/secrets?folder_id=f1&page=3&page_size=25&sort=updated_at&order=desc')
+    expect(s.page).toBe(3)
     await s.search('prod')
     expect(s.items.length).toBe(1)
+    expect(s.total).toBe(1)
     expect(s.query).toBe('prod')
+    expect(String(fetch.mock.calls[2]?.[0])).toBe('/api/warden/v1/secrets/search?q=prod&page=1&page_size=25&sort=relevance&order=desc')
+    await s.refresh()
+    expect(String(fetch.mock.calls[3]?.[0])).toContain('secrets/search?q=prod')
     await s.search('   ')
     expect(s.query).toBe('')
+    expect(String(fetch.mock.calls[4]?.[0])).toContain('folder_id=f1')
     for (const call of fetch.mock.calls) expect(String(call[0])).not.toContain('password')
   })
 
   it('creates, reveals, changes the password, lists versions and restores', async () => {
     const calls: Array<[string, string]> = []
+    let removed = false
     stubFetch((url, init) => {
       calls.push([init?.method ?? 'GET', url])
+      if (url === '/api/warden/v1/secrets/s1/remove') removed = true
       if (url === '/api/warden/v1/secrets' && init?.method === 'POST') return { status: 201, body: db }
       if (url.startsWith('/api/warden/v1/secrets/s1/password') && init?.method === 'GET') return { status: 200, body: { password: 'WARDEN-MARKER-PW-ui', version: url.includes('version=1') ? 1 : 2 } }
       if (url === '/api/warden/v1/secrets/s1/password' && init?.method === 'PUT') return { status: 200, body: { version: 2 } }
@@ -47,7 +57,7 @@ describe('secrets store', () => {
       if (url === '/api/warden/v1/secrets/s1/versions/1/restore') return { status: 200, body: { version: 3 } }
       if (url === '/api/warden/v1/secrets/s1/remove') return { status: 204, body: null }
       if (url === '/api/warden/v1/secrets/s1/totp' && init?.method === 'GET') return { status: 200, body: { code: '123456', period: 30, expires_in: 12 } }
-      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: [db] } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: removed ? [] : [db], total: removed ? 0 : 1 } }
       return { status: 404, body: { reason: 'not_found' } }
     })
     const s = useSecrets()
@@ -116,6 +126,57 @@ describe('secrets view', () => {
     expect(sessionStorage.length).toBe(0)
     // New secret button appears for a writable folder.
     expect(w.find('[data-test="new-secret"]').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('lists folders first, then one server page of secrets with the total; sorts and searches on the server', async () => {
+    const calls: string[] = []
+    stubFetch((url) => {
+      calls.push(url)
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra), node(folder('f2', 'Apps', '/Apps'))] } }
+      const q = new URL(url, 'https://x').searchParams
+      if (url.startsWith('/api/warden/v1/secrets')) {
+        const size = Number(q.get('page_size'))
+        const total = url.includes('/search') ? 30 : 60
+        const page = Math.min(Number(q.get('page')), Math.ceil(total / size))
+        return { status: 200, body: { items: [secret('s' + page, 'secret on page ' + page)], total, page, page_size: size, sort: q.get('sort'), order: q.get('order') } }
+      }
+      return { status: 404, body: { reason: 'not_found' } }
+    })
+    const lists = () => calls.filter((c) => c.startsWith('/api/warden/v1/secrets'))
+    const w = mountInLayout(SecretsView, {})
+    await flushPromises()
+    // Folders first (unpaged), then the secrets of the root, one page at a time.
+    const tables = Array.from(document.body.querySelectorAll('[data-test="folder-table"], [data-test="secret-table"]')).map((t) => t.getAttribute('data-test'))
+    expect(tables).toEqual(['folder-table', 'secret-table'])
+    expect(w.findAll('[data-test="folder-row"]').length).toBe(2)
+    expect(lists()[0]).toBe('/api/warden/v1/secrets?root=true&page=1&page_size=25&sort=name&order=asc')
+    expect(w.text()).toContain('Showing 1–25 of 60')
+    await w.find('[data-test="secret-table"] [aria-label="Page 2"]').trigger('click')
+    await flushPromises()
+    expect(lists().at(-1)).toBe('/api/warden/v1/secrets?root=true&page=2&page_size=25&sort=name&order=asc')
+    expect(w.text()).toContain('secret on page 2')
+    // Sorting orders the whole list on the server and starts at page 1.
+    await w.findAll('[data-test="secret-table"] th button').find((b) => b.text().startsWith('Updated'))!.trigger('click')
+    await flushPromises()
+    expect(lists().at(-1)).toBe('/api/warden/v1/secrets?root=true&page=1&page_size=25&sort=updated_at&order=desc')
+    // Another folder starts at page 1 again.
+    await w.find('[data-test="secret-table"] [aria-label="Page 2"]').trigger('click')
+    await flushPromises()
+    await w.findAll('[role=treeitem]').find((i) => i.text() === 'Infra')!.trigger('click')
+    await flushPromises()
+    expect(lists().at(-1)).toBe('/api/warden/v1/secrets?folder_id=f1&page=1&page_size=25&sort=updated_at&order=desc')
+    // Search pages by relevance; folders are not listed with results.
+    const box = document.body.querySelector('[data-test="search"] input') as HTMLInputElement
+    box.value = 'prod'
+    box.dispatchEvent(new Event('input'))
+    await flushPromises()
+    click(document.body, '[data-test="search-go"]')
+    await flushPromises()
+    expect(lists().at(-1)).toBe('/api/warden/v1/secrets/search?q=prod&page=1&page_size=25&sort=relevance&order=desc')
+    expect(w.findAll('[data-test="folder-row"]').length).toBe(0)
+    expect(w.text()).toContain('of 30')
+    for (const c of calls) expect(c).not.toContain('password')
     w.unmount()
   })
 

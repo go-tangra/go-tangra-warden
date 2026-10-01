@@ -83,7 +83,7 @@ describe('explorer folder management', () => {
     await treeItem('Infra').trigger('click')
     await flushPromises()
     expect(w.find('[data-test="current-path"]').text()).toContain('Infra')
-    expect(w.findAll('[data-test="folder-row"]').map((r) => r.text())).toEqual(['Databases0 secret(s)———'])
+    expect(w.findAll('[data-test="folder-row"]').map((r) => r.text())).toEqual(['Databases0 secret(s)'])
     // New folder under the selection.
     click(document.body, '[data-test="folder-new"]')
     await flushPromises()

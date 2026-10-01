@@ -17,13 +17,16 @@ describe('shares store', () => {
     stubFetch((url, init) => {
       calls.push((init?.method ?? 'GET') + ' ' + url + ' ' + (init?.body ?? ''))
       if (url === '/api/warden/v1/secrets/s1/shares' && init?.method === 'POST') return { status: 201, body: active }
-      if (url === '/api/warden/v1/secrets/s1/shares') return { status: 200, body: { items: [active, consumed] } }
+      if (url.startsWith('/api/warden/v1/secrets/s1/shares?')) return { status: 200, body: { items: [active, consumed], total: 2, page: 1, page_size: 10, sort: 'created_at', order: 'desc' } }
       if (url === '/api/warden/v1/shares/sh1/cancel') return { status: 204, body: null }
       return { status: 404, body: { reason: 'not_found' } }
     })
     const s = useShares()
     await s.list('s1')
     expect(s.items.length).toBe(2)
+    expect(s.total).toBe(2)
+    // One page of the caller's shares, newest first.
+    expect(calls[0]).toContain('/api/warden/v1/secrets/s1/shares?page=1&page_size=10&sort=created_at&order=desc')
     const created = await s.create('s1', { recipient_email: 'friend@outside.test', validity_seconds: 3600, max_opens: 1, cidr: '10.0.0.0/8' })
     expect(created.id).toBe('sh1')
     expect(JSON.stringify(created)).not.toContain('token')
@@ -95,7 +98,10 @@ describe('SharesPanel in the drawer', () => {
     const calls: string[] = []
     stubFetch((url, init) => {
       calls.push((init?.method ?? 'GET') + ' ' + url)
-      if (url === '/api/warden/v1/secrets/s1/shares') return { status: 200, body: { items: [active, consumed] } }
+      if (url.startsWith('/api/warden/v1/secrets/s1/shares?')) {
+        const q = new URL(url, 'https://x').searchParams
+        return { status: 200, body: { items: q.get('page') === '2' ? [consumed] : [active, consumed], total: 12, page: Number(q.get('page')), page_size: 10, sort: q.get('sort'), order: q.get('order') } }
+      }
       if (url === '/api/warden/v1/shares/sh1/cancel') return { status: 204, body: null }
       return { status: 200, body: { items: [] } }
     })
@@ -107,6 +113,14 @@ describe('SharesPanel in the drawer', () => {
     click(document.body, '[data-test="share-cancel-sh1"]')
     await flushPromises()
     expect(calls.some((c) => c.includes('/shares/sh1/cancel'))).toBe(true)
+    // Paged on the server: the total, page 2 and sorting by expiry.
+    expect(document.body.textContent).toContain('of 12')
+    click(document.body, '[data-test="shares-panel"] [aria-label="Page 2"]')
+    await flushPromises()
+    expect(calls.at(-1)).toContain('page=2&page_size=10&sort=created_at&order=desc')
+    ;(Array.from(document.body.querySelectorAll('[data-test="shares-panel"] th button')).find((b) => b.textContent?.startsWith('Until')) as HTMLButtonElement).click()
+    await flushPromises()
+    expect(calls.at(-1)).toContain('page=1&page_size=10&sort=expires_at&order=asc')
     w.unmount()
     const d = mountInLayout(SecretDetails, { secret: secret('s1', 'db', { permissions: viewer }) })
     await flushPromises()

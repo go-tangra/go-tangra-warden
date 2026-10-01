@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { UiPage, UiCard, UiTree, UiDataTable, UiButton, UiIcon, UiPermissionDrawer, usePermissionGrants, type Column, type TreeNode } from '@go-tangra/ui'
+import { computed, onMounted, ref, watch } from 'vue'
+import { UiPage, UiCard, UiTree, UiDataTable, UiButton, UiIcon, UiPermissionDrawer, usePermissionGrants, useListQuery, type Column, type TreeNode } from '@go-tangra/ui'
 import { useFolders } from '@/stores/folders'
 import { useSecrets } from '@/stores/secrets'
+import { SECRET_LIST } from '@/stores/paged'
 import { useDirectory } from '@/stores/directory'
 import { grantable, usePermissions, type Relation, type ResourceType, type SubjectType } from '@/stores/permissions'
 import type { FolderNode, Secret } from '@/api/types'
@@ -19,12 +20,20 @@ const ROOT = '__root__'
 const toNode = (n: FolderNode): TreeNode => ({ id: n.folder.id, label: n.folder.name, icon: 'mdi-folder-outline', children: n.children.map(toNode) })
 const tree = computed<TreeNode[]>(() => [{ id: ROOT, label: 'Root', icon: 'mdi-home-outline', children: folders.tree.map(toNode) }])
 const treeSelected = computed({ get: () => selected.value ?? ROOT, set: (id: string) => void select(id === ROOT ? null : id) })
+// Server paging and sorting of the folder's secrets (?perms.page=…).
+const lq = useListQuery('perms', SECRET_LIST.opts)
+async function load(): Promise<void> {
+  const res = await secrets.list(selected.value, lq.query.value)
+  if (res?.page) lq.clampTo(res.page)
+}
+watch(lq.query, () => void load())
 onMounted(async () => {
-  await Promise.all([folders.load(), secrets.list(null), dir.loadRoles()])
+  await Promise.all([folders.load(), load(), dir.loadRoles()])
 })
 async function select(id: string | null): Promise<void> {
   selected.value = id
-  await secrets.list(id)
+  if (lq.page.value !== 1) lq.resetPage()
+  else await load()
 }
 const access = usePermissionGrants({
   grants: () => perms.grants,
@@ -42,10 +51,10 @@ async function open(type: ResourceType, id: string, name: string): Promise<void>
 }
 async function closed(v: boolean): Promise<void> {
   drawer.value = v
-  if (!v) await secrets.refresh()
+  if (!v) await load()
 }
 const columns: Column<Secret>[] = [
-  { key: 'name', label: 'Secret' },
+  { key: 'name', label: 'Secret', sortable: true },
   { key: 'permissions', label: 'Your permissions', format: (s) => Object.entries(s.permissions).filter(([, v]) => v).map(([k]) => k).join(', ') },
 ]
 </script>
@@ -60,7 +69,7 @@ const columns: Column<Secret>[] = [
           <span class="grow" />
           <UiButton v-if="current" size="sm" variant="soft" data-test="manage-folder" @click="open('folder', current.id, current.path)">Manage folder access</UiButton>
         </div>
-        <UiDataTable :items="secrets.items" :columns="columns" :loading="secrets.loading" caption="Secrets in the folder" empty-title="No secrets here" :row-attrs="(s) => ({ 'data-test': 'perm-row-' + s.id })">
+        <UiDataTable :items="secrets.items" :columns="columns" :loading="secrets.loading" :total="secrets.total" :page="lq.page.value" :page-size="lq.pageSize.value" :sort="lq.sort.value" caption="Secrets in the folder" empty-title="No secrets here" :row-attrs="(s) => ({ 'data-test': 'perm-row-' + s.id })" @update:page="lq.setPage" @update:page-size="lq.setPageSize" @update:sort="lq.setSort">
           <template #cell-permissions="{ row }">
             <span v-for="(v, k) in row.permissions" :key="k" class="me-2 inline-flex items-center gap-0.5 text-xs"><UiIcon :name="v ? 'mdi-check' : 'mdi-close'" size="xs" :class="v ? 'text-success' : 'text-base-content/70'" />{{ k }}</span>
           </template>

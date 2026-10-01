@@ -104,9 +104,11 @@ describe('stats card and audit table', () => {
         return { status: 200, body: { items: [{ id: 'u1', display_name: 'Alice' }] } }
       }
       if (url.startsWith('/api/warden/v1/audit')) {
-        if (url.includes('event_type=access_refused')) return { status: 200, body: { items: [events[1]] } }
-        if (url.includes('cursor=c1')) return { status: 200, body: { items: [events[1]] } }
-        return { status: 200, body: { items: [events[0]], next_cursor: 'c1' } }
+        const q = new URL(url, 'https://x').searchParams
+        const meta = { page: Number(q.get('page')), page_size: Number(q.get('page_size')), sort: 'ts', order: 'desc' }
+        if (url.includes('event_type=access_refused')) return { status: 200, body: { items: [events[1]], total: 1, ...meta } }
+        if (q.get('page') === '2') return { status: 200, body: { items: [events[1]], total: 51, ...meta } }
+        return { status: 200, body: { items: [events[0]], total: 51, ...meta } }
       }
       return { status: 404, body: { reason: 'not_found' } }
     })
@@ -123,12 +125,16 @@ describe('stats card and audit table', () => {
     expect(looked).toEqual([['u1']])
     expect(document.body.querySelector('[data-test="audit-row"]')!.textContent).toContain('Alice')
     expect(document.body.querySelector('[data-test="audit-row"]')!.textContent).toContain('secret DB admin')
-    ;(Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Load more') as HTMLButtonElement).click()
+    // One server page at a time, newest first; the window is the server's (7 days by default).
+    expect(calls.find((c) => c.startsWith('/api/warden/v1/audit'))).toBe('/api/warden/v1/audit?page=1&page_size=50&sort=ts&order=desc')
+    expect(document.body.textContent).toContain('of 51')
+    click(document.body, '[data-test="audit-table"] [aria-label="Page 2"]')
     await flushPromises()
-    expect(document.body.querySelectorAll('[data-test="audit-row"]').length).toBe(2)
+    expect(calls.at(-2)).toBe('/api/warden/v1/audit?page=2&page_size=50&sort=ts&order=desc')
+    expect(document.body.querySelectorAll('[data-test="audit-row"]').length).toBe(1)
     // Only new ids are looked up; unknown ones stay as ids.
     expect(looked).toEqual([['u1'], ['u2']])
-    expect(document.body.querySelectorAll('[data-test="audit-row"]')[1]!.textContent).toContain('u2')
+    expect(document.body.querySelector('[data-test="audit-row"]')!.textContent).toContain('u2')
     type(document.body, '[data-test="audit-type"]', 'access_refused')
     await flushPromises()
     click(document.body, '[data-test="audit-apply"]')

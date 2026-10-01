@@ -9,6 +9,7 @@ import { describe } from '@/api/client'
 import type { Secret } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'
 import { useShares, type Share } from '@/stores/shares'
+import { SHARE_LIST } from '@/stores/paged'
 import { changePasswordSchema, totpSchema, shareSchema, SHARE_VALIDITY } from '@/schemas'
 
 const props = defineProps<{ secret: Secret }>()
@@ -119,7 +120,7 @@ async function dropTotp(): Promise<void> {
   }
 }
 
-watch(() => props.secret.id, () => { reset(); if (canShare.value) void shares.list(props.secret.id) }, { immediate: true })
+watch(() => props.secret.id, () => { reset(); if (canShare.value) void shares.list(props.secret.id, SHARE_LIST.first) }, { immediate: true })
 
 // --- email shares ---
 const shareOpen = ref(false)
@@ -143,11 +144,18 @@ async function cancelShare(s: Share): Promise<void> {
     error.value = describe(e)
   }
 }
+// Server paging and sorting of the caller's shares (newest first); kept in
+// component state, not the URL (the panel lives in a drawer).
+const shareSort = computed(() => ({ key: shares.params.sort, dir: shares.params.order }))
+const sharePage = (page: number) => void shares.list(props.secret.id, { ...shares.params, page })
+const shareSize = (size: number) => void shares.list(props.secret.id, { ...shares.params, page: 1, page_size: size })
+const shareSortBy = (s: { key: string; dir: 'asc' | 'desc' }) => void shares.list(props.secret.id, { ...shares.params, page: 1, sort: s.key, order: s.dir })
 const shareColumns: Column<Share>[] = [
   { key: 'recipient_email', label: 'Recipient' },
   { key: 'state', label: 'State', width: 'sm' },
   { key: 'opens', label: 'Reveals', format: (s) => `${s.opens}/${s.max_opens}`, hideOnStack: true },
-  { key: 'expires_at', label: 'Until', format: (s) => new Date(s.expires_at).toLocaleString() + (s.cidr ? ' · ' + s.cidr : '') },
+  { key: 'expires_at', label: 'Until', sortable: true, format: (s) => new Date(s.expires_at).toLocaleString() + (s.cidr ? ' · ' + s.cidr : '') },
+  { key: 'created_at', label: 'Created', sortable: true, defaultDir: 'desc', hideOnStack: true, format: (s) => new Date(s.created_at).toLocaleString() },
 ]
 </script>
 
@@ -185,7 +193,7 @@ const shareColumns: Column<Share>[] = [
     </UiSection>
     <UiSection v-if="canShare" title="Shared links" data-test="shares-panel">
       <UiAlert v-if="shares.error" kind="error" class="mb-2" data-test="shares-error">{{ shares.error }}</UiAlert>
-      <UiDataTable :items="shares.items" :columns="shareColumns" caption="Shared links" empty-title="No links yet" :row-attrs="(s) => ({ 'data-test': 'share-' + s.id })">
+      <UiDataTable :items="shares.items" :columns="shareColumns" :loading="shares.loading" :total="shares.total" :page="shares.params.page" :page-size="shares.params.page_size" :page-sizes="[10, 25, 50]" :sort="shareSort" caption="Shared links" empty-title="No links yet" :row-attrs="(s) => ({ 'data-test': 'share-' + s.id })" @update:page="sharePage" @update:page-size="shareSize" @update:sort="shareSortBy">
         <template #cell-state="{ row }"><UiStatusChip :status="row.state" :colors="{ consumed: 'neutral', expired: 'neutral', cancelled: 'neutral' }" :data-test="'share-state-' + row.id" /></template>
         <template #actions="{ row }"><UiButton v-if="row.state === 'active'" size="xs" variant="text" color="error" :data-test="'share-cancel-' + row.id" @click="cancelShare(row)">Cancel</UiButton></template>
       </UiDataTable>

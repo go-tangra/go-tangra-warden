@@ -1,57 +1,61 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
-import type { Page, Secret, SecretInput, SecretVersion } from '@/api/types'
+import type { ListParams, Page, Secret, SecretInput, SecretVersion } from '@/api/types'
+import { SEARCH_LIST, SECRET_LIST } from '@/stores/paged'
 
 export const useSecrets = defineStore('warden-secrets', () => {
   const items = ref<Secret[]>([])
-  const next = ref<string | undefined>()
+  /** Secrets matching the folder or search and visible to the caller (server count). */
+  const total = ref(0)
+  /** The page the server returned (it clamps pages beyond the end). */
+  const page = ref(1)
+  const params = ref<ListParams>({ ...SECRET_LIST.first })
   const loading = ref(false)
   const error = ref('')
   const folderId = ref<string | null>(null)
   const query = ref('')
+  let seq = 0
 
-  async function list(folder: string | null, cursor?: string): Promise<void> {
+  /** Loads one page; resolves with it, or null when it failed or a newer request superseded it. */
+  async function load(path: 'secrets' | 'secrets/search', q: Record<string, string | number | boolean | undefined>, p: ListParams): Promise<Page<Secret> | null> {
+    const mine = ++seq
     loading.value = true
     error.value = ''
+    params.value = { ...p }
     try {
-      const page = await api<Page<Secret>>('GET', 'secrets', undefined, { query: { folder_id: folder ?? undefined, root: folder === null ? true : undefined, cursor, limit: 50 } })
-      items.value = cursor ? [...items.value, ...page.items] : page.items
-      next.value = page.next
-      folderId.value = folder
-      query.value = ''
+      const res = await api<Page<Secret>>('GET', path, undefined, { query: { ...q, ...p } })
+      if (mine !== seq) return null
+      items.value = res.items ?? []
+      total.value = res.total ?? items.value.length
+      page.value = res.page ?? p.page
+      return res
     } catch (e) {
-      error.value = (e as Error).message
+      if (mine === seq) error.value = (e as Error).message
+      return null
     } finally {
-      loading.value = false
+      if (mine === seq) loading.value = false
     }
   }
 
-  async function search(q: string, cursor?: string): Promise<void> {
+  /** One page of a folder's secrets (the root when null). */
+  async function list(folder: string | null, p: ListParams = SECRET_LIST.first): Promise<Page<Secret> | null> {
+    folderId.value = folder
+    query.value = ''
+    return load('secrets', { folder_id: folder ?? undefined, root: folder === null ? true : undefined }, p)
+  }
+
+  /** One page of search results (blank text lists the current folder). */
+  async function search(q: string, p: ListParams = SEARCH_LIST.first): Promise<Page<Secret> | null> {
     if (!q.trim()) return list(folderId.value)
-    loading.value = true
-    error.value = ''
-    try {
-      const page = await api<Page<Secret>>('GET', 'secrets/search', undefined, { query: { q: q.trim(), cursor, limit: 50 } })
-      items.value = cursor ? [...items.value, ...page.items] : page.items
-      next.value = page.next
-      query.value = q
-    } catch (e) {
-      error.value = (e as Error).message
-    } finally {
-      loading.value = false
-    }
+    query.value = q.trim()
+    return load('secrets/search', { q: q.trim() }, p)
   }
 
-  async function more(): Promise<void> {
-    if (!next.value) return
-    if (query.value) return search(query.value, next.value)
-    return list(folderId.value, next.value)
-  }
-
+  /** Reloads the current page. */
   async function refresh(): Promise<void> {
-    if (query.value) return search(query.value)
-    return list(folderId.value)
+    if (query.value) await search(query.value, params.value)
+    else await list(folderId.value, params.value)
   }
 
   async function get(id: string): Promise<Secret> {
@@ -100,6 +104,7 @@ export const useSecrets = defineStore('warden-secrets', () => {
   async function remove(id: string): Promise<void> {
     await api('POST', 'secrets/' + id + '/remove')
     items.value = items.value.filter((i) => i.id !== id)
+    await refresh()
   }
 
   async function totp(id: string): Promise<{ code: string; period: number; expires_in: number }> {
@@ -116,5 +121,5 @@ export const useSecrets = defineStore('warden-secrets', () => {
     await refresh()
   }
 
-  return { items, next, loading, error, folderId, query, list, search, more, refresh, get, create, update, reveal, changePassword, versions, restore, move, remove, totp, setTotp, removeTotp }
+  return { items, total, page, params, loading, error, folderId, query, list, search, refresh, get, create, update, reveal, changePassword, versions, restore, move, remove, totp, setTotp, removeTotp }
 })

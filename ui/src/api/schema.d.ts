@@ -91,6 +91,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description secrets of a folder (root when folder_id is omitted) the caller may read: under a readable folder all of them, at the root those granted directly; visibility applies to the total too. Default sort name asc. With only cursor/limit (legacy, one release): {items, next, total}. */
         get: operations["listSecrets"];
         put?: never;
         post: operations["createSecret"];
@@ -107,6 +108,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description readable matches of name, username, host, description or folder path (material is never searched); default sort relevance desc (name matches first, then name order). With only cursor/limit (legacy, one release): {items, next, total}. */
         get: operations["searchSecrets"];
         put?: never;
         post?: never;
@@ -421,13 +423,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/warden/share/{token}": {
+    "/warden/share": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        /** @description The token travels in the URL fragment (#<token>), never in the path or query, so no server, proxy or log sees it; the page reads it and posts it to /share/open on user action */
         get: operations["sharePage"];
         put?: never;
         post?: never;
@@ -492,6 +495,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description events newest first within [from, to]; without from the window is the 7 days before to (default now), and the total counts that window exactly. With only cursor (legacy, one release): {items, next_cursor, total}. */
         get: operations["auditTrail"];
         put?: never;
         post?: never;
@@ -523,6 +527,27 @@ export interface components {
     schemas: {
         Error: {
             reason: string;
+            detail?: {
+                param?: string;
+            };
+        };
+        /** @description list-contract page: items (at most page_size) plus the exact total of records matching the filters and visible to the caller; page is the page returned (a page beyond the end answers the last page) */
+        PageMeta: {
+            total: number;
+            page: number;
+            page_size: number;
+            sort: string;
+            /** @enum {string} */
+            order: "asc" | "desc";
+        };
+        SecretPage: components["schemas"]["PageMeta"] & {
+            items?: components["schemas"]["Secret"][];
+        };
+        SharePage: components["schemas"]["PageMeta"] & {
+            items?: components["schemas"]["Share"][];
+        };
+        AuditPage: components["schemas"]["PageMeta"] & {
+            items?: Record<string, never>[];
         };
         Name: string;
         Folder: {
@@ -692,7 +717,11 @@ export interface components {
         csrf: string;
         id: string;
         cursor: string;
+        /** @description legacy cursor paging (one release); not combinable with page/page_size/sort/order */
         limit: number;
+        page: number;
+        pageSize: number;
+        order: "asc" | "desc";
     };
     requestBodies: never;
     headers: never;
@@ -905,7 +934,12 @@ export interface operations {
             query?: {
                 folder_id?: string;
                 root?: boolean;
+                page?: components["parameters"]["page"];
+                page_size?: components["parameters"]["pageSize"];
+                sort?: "name" | "updated_at" | "created_at";
+                order?: components["parameters"]["order"];
                 cursor?: components["parameters"]["cursor"];
+                /** @description legacy cursor paging (one release); not combinable with page/page_size/sort/order */
                 limit?: components["parameters"]["limit"];
             };
             header?: never;
@@ -914,12 +948,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description items: Secret[], next */
+            /** @description page of secrets without material */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SecretPage"];
+                };
+            };
+            /** @description validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -958,7 +1003,12 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
+                page?: components["parameters"]["page"];
+                page_size?: components["parameters"]["pageSize"];
+                sort?: "relevance" | "name" | "updated_at";
+                order?: components["parameters"]["order"];
                 cursor?: components["parameters"]["cursor"];
+                /** @description legacy cursor paging (one release); not combinable with page/page_size/sort/order */
                 limit?: components["parameters"]["limit"];
             };
             header?: never;
@@ -967,12 +1017,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description readable matches, no material */
+            /** @description page of readable matches, no material */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SecretPage"];
+                };
+            };
+            /** @description validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -1399,6 +1460,7 @@ export interface operations {
             query?: {
                 permission?: "read" | "write" | "delete" | "share";
                 cursor?: components["parameters"]["cursor"];
+                /** @description legacy cursor paging (one release); not combinable with page/page_size/sort/order */
                 limit?: components["parameters"]["limit"];
             };
             header?: never;
@@ -1553,7 +1615,12 @@ export interface operations {
     };
     listShares: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: components["parameters"]["page"];
+                page_size?: components["parameters"]["pageSize"];
+                sort?: "created_at" | "expires_at";
+                order?: components["parameters"]["order"];
+            };
             header?: never;
             path: {
                 id: components["parameters"]["id"];
@@ -1562,12 +1629,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Share[] created by the caller */
+            /** @description page of the shares created by the caller (default created_at desc) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SharePage"];
+                };
+            };
+            /** @description validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -1630,9 +1708,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -1737,6 +1813,10 @@ export interface operations {
                 actor_id?: string;
                 from?: string;
                 to?: string;
+                page?: components["parameters"]["page"];
+                page_size?: components["parameters"]["pageSize"];
+                sort?: "ts";
+                order?: components["parameters"]["order"];
                 cursor?: components["parameters"]["cursor"];
             };
             header?: never;
@@ -1745,12 +1825,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description page of audit events (details never carry material) */
+            /** @description page of audit events (details never carry material; subject_name resolves secrets and folders that still exist) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            /** @description validation_failed {detail: {param}} for an invalid page, page_size, sort or order, or cursor/limit mixed with them */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };

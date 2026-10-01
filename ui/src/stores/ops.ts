@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
+import type { ListParams, Page } from '@/api/types'
+import { AUDIT_LIST } from '@/stores/paged'
 
 export interface Stats {
   secrets: number
@@ -89,8 +91,11 @@ export function satisfies(p: string, o: GeneratorOptions): boolean {
 export const useOps = defineStore('warden-ops', () => {
   const stats = ref<Stats | null>(null)
   const audit = ref<AuditItem[]>([])
-  const next = ref('')
+  /** Events matching the filter within the window (server count). */
+  const auditTotal = ref(0)
+  const auditLoading = ref(false)
   const error = ref('')
+  let auditSeq = 0
 
   async function loadStats(): Promise<void> {
     error.value = ''
@@ -101,14 +106,26 @@ export const useOps = defineStore('warden-ops', () => {
     }
   }
 
-  async function loadAudit(filter: AuditFilter, cursor?: string): Promise<void> {
+  /**
+   * One page of the audit trail (newest first). Without from/to the server
+   * answers the last 7 days. Resolves with the page, or null when it failed
+   * or a newer request superseded it.
+   */
+  async function loadAudit(filter: AuditFilter, p: ListParams = AUDIT_LIST.first): Promise<Page<AuditItem> | null> {
+    const mine = ++auditSeq
     error.value = ''
+    auditLoading.value = true
     try {
-      const page = await api<{ items: AuditItem[]; next_cursor?: string }>('GET', 'audit', undefined, { query: { ...filter, cursor } })
-      audit.value = cursor ? [...audit.value, ...page.items] : page.items
-      next.value = page.next_cursor ?? ''
+      const res = await api<Page<AuditItem>>('GET', 'audit', undefined, { query: { ...filter, ...p } })
+      if (mine !== auditSeq) return null
+      audit.value = res.items ?? []
+      auditTotal.value = res.total ?? audit.value.length
+      return res
     } catch (e) {
-      error.value = (e as Error).message
+      if (mine === auditSeq) error.value = (e as Error).message
+      return null
+    } finally {
+      if (mine === auditSeq) auditLoading.value = false
     }
   }
 
@@ -119,5 +136,5 @@ export const useOps = defineStore('warden-ops', () => {
     return out.password
   }
 
-  return { stats, audit, next, error, loadStats, loadAudit, generate }
+  return { stats, audit, auditTotal, auditLoading, error, loadStats, loadAudit, generate }
 })
