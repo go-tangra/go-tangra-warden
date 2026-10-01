@@ -507,9 +507,32 @@ func TestMoveDeleteTOTP(t *testing.T) {
 	archive := store.NewID()
 	must(t, f.ms.InsertFolder(ctx, store.Folder{ID: archive, TenantID: tA, Name: "Archive", Path: "/Archive"}))
 	v := f.create(t, "db", &f.infra)
-	// Move needs write on the secret and the target.
+	// Move needs write on the secret and the target. A target the caller
+	// cannot read, a missing one and one of another tenant are all not found
+	// (never revealed); a readable, read-only target is forbidden. A refused
+	// move leaves the secret where it was.
+	if _, err := f.svc.Move(ctx, alice, v.ID, &archive); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move unreadable target: %v", err)
+	}
+	missing := store.NewID()
+	if _, err := f.svc.Move(ctx, alice, v.ID, &missing); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move missing target: %v", err)
+	}
+	foreign := store.NewID()
+	must(t, f.ms.InsertFolder(ctx, store.Folder{ID: foreign, TenantID: tB, Name: "Foreign", Path: "/Foreign"}))
+	if _, err := f.svc.Move(ctx, alice, v.ID, &foreign); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move foreign target: %v", err)
+	}
+	if err := f.ms.MoveSecret(ctx, tA, v.ID, &foreign, nil); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("store move foreign target: %v", err)
+	}
+	_, err := f.ms.UpsertGrant(ctx, store.Grant{ID: store.NewID(), TenantID: tA, ResourceType: "folder", ResourceID: archive, SubjectType: "user", SubjectID: uA, Relation: "viewer"})
+	must(t, err)
 	if _, err := f.svc.Move(ctx, alice, v.ID, &archive); !errors.Is(err, ErrForbidden) {
-		t.Fatal("move target")
+		t.Fatalf("move read-only target: %v", err)
+	}
+	if got, _ := f.svc.Get(ctx, alice, v.ID); got.FolderID == nil || *got.FolderID != f.infra {
+		t.Fatalf("refused moves changed the folder: %+v", got.FolderID)
 	}
 	must(t, f.az.GrantOwner(ctx, tA, authz.Folder, archive, uA))
 	m, err := f.svc.Move(ctx, alice, v.ID, &archive)

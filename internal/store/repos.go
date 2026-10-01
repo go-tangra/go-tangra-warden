@@ -96,10 +96,14 @@ func MoveFolder(ctx context.Context, tx pgx.Tx, tenantID, id string, newParent *
 	if err != nil {
 		return err
 	}
-	ct, err := tx.Exec(ctx, "UPDATE folders SET parent_id = $3, ancestors = $4, path = $5, updated_by = NULLIF($6,'')::uuid, updated_at = now() WHERE tenant_id = $1 AND id = $2",
+	// The new parent must be a folder of the same tenant, checked in the same
+	// statement (the column FK alone does not see tenants); a parent deleted
+	// meanwhile trips the FK and is not found as well.
+	ct, err := tx.Exec(ctx, `UPDATE folders SET parent_id = $3, ancestors = $4, path = $5, updated_by = NULLIF($6,'')::uuid, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM folders p WHERE p.tenant_id = $1 AND p.id = $3::uuid))`,
 		tenantID, id, newParent, nonNil(newAncestors), newPath, updatedBy)
 	if err != nil {
-		return conflict(err)
+		return missingRef(conflict(err))
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrNotFound
@@ -126,8 +130,29 @@ func DeleteFolder(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
 // CountFolderContents counts direct subfolders and (live) secrets.
 func CountFolderContents(ctx context.Context, tx pgx.Tx, tenantID, id string) (folders, secrets int, err error) {
 	err = tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM folders WHERE tenant_id = $1 AND parent_id = $2),
-		(SELECT count(*) FROM secrets WHERE tenant_id = $1 AND folder_id = $2)`, tenantID, id).Scan(&folders, &secrets)
+		(SELECT count(*) FROM secrets WHERE tenant_id = $1 AND folder_id = $2 AND deleted_at IS NULL)`, tenantID, id).Scan(&folders, &secrets)
 	return
+}
+
+// FolderSecretCounts counts the live secrets directly inside each folder of
+// a tenant (folders without secrets are absent), in one index-backed
+// aggregate for the folder tree.
+func FolderSecretCounts(ctx context.Context, tx pgx.Tx, tenantID string) (map[string]int, error) {
+	rows, err := tx.Query(ctx, "SELECT folder_id, count(*) FROM secrets WHERE tenant_id = $1 AND folder_id IS NOT NULL AND deleted_at IS NULL GROUP BY folder_id", tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
 }
 
 func parentPath(p string) string {
@@ -275,13 +300,21 @@ func SetSecretTOTP(ctx context.Context, tx pgx.Tx, tenantID, id string, has bool
 	return err
 }
 
-// MoveSecret changes the folder.
+// MoveSecret changes the folder (nil = root). The target must be a folder of
+// the same tenant, checked in the same statement (the column FK alone does
+// not see tenants): a missing target updates nothing and is ErrNotFound, and
+// one deleted meanwhile trips the FK and is ErrNotFound too.
 func MoveSecret(ctx context.Context, tx pgx.Tx, tenantID, id string, folderID *string, updatedBy *string) error {
-	ct, err := tx.Exec(ctx, "UPDATE secrets SET folder_id = $3, updated_by = $4, updated_at = now() WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL", tenantID, id, folderID, updatedBy)
-	if err == nil && ct.RowsAffected() == 0 {
+	ct, err := tx.Exec(ctx, `UPDATE secrets SET folder_id = $3, updated_by = $4, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL
+		AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM folders f WHERE f.tenant_id = $1 AND f.id = $3::uuid))`, tenantID, id, folderID, updatedBy)
+	if err != nil {
+		return missingRef(err)
+	}
+	if ct.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return err
+	return nil
 }
 
 // SoftDeleteSecret hides the row until the vault destroy succeeds.

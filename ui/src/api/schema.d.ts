@@ -884,6 +884,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description forbidden: no write on the folder, or the new parent is readable but not writable */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not_found: the folder, or the new parent is missing, of another tenant or not readable by the caller (never revealed); nothing changes */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description cycle or sibling name */
             409: {
                 headers: {
@@ -1140,6 +1154,20 @@ export interface operations {
         responses: {
             /** @description moved (write on the secret and on the target folder) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description forbidden: no write on the secret, or the target folder is readable but not writable */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not_found: the secret, or the target folder is missing, of another tenant or not readable by the caller (never revealed); the secret stays where it was */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useAbility } from '@casl/vue'
 import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, useListQuery, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
 import { useZodForm, zodToFields } from '@go-tangra/ui/forms'
-import { describe } from '@/api/client'
+import { ApiError, describe } from '@/api/client'
 import type { Folder, FolderNode, Secret } from '@/api/types'
 import { useSecrets } from '@/stores/secrets'
 import { AUDIT_LIST, SEARCH_LIST, SECRET_LIST } from '@/stores/paged'
@@ -128,8 +128,17 @@ const initial = computed(() => (current.value ? { folder_id: current.value.folde
 async function submit(v: Record<string, unknown>): Promise<Secret> {
   const folder_id = (v.folder_id as string | undefined) ?? null
   if (current.value) {
-    const s = await secrets.update(current.value.id, { name: v.name as string, username: v.username as string, host_url: v.host_url as string, description: v.description as string, metadata: v.metadata as Record<string, unknown> })
-    return folder_id !== current.value.folder_id ? secrets.move(current.value.id, folder_id) : s
+    // Move first: a refused move (the folder is gone or not writable) leaves
+    // the secret exactly as it was and never reads as saved.
+    if (folder_id !== current.value.folder_id) {
+      try {
+        await secrets.move(current.value.id, folder_id)
+      } catch (e) {
+        toast.error('Secret not moved', e instanceof ApiError && e.reason === 'not_found' ? 'The target folder does not exist or is not available to you.' : describe(e))
+        throw e
+      }
+    }
+    return secrets.update(current.value.id, { name: v.name as string, username: v.username as string, host_url: v.host_url as string, description: v.description as string, metadata: v.metadata as Record<string, unknown> })
   }
   return secrets.create({ folder_id, name: v.name as string, username: v.username as string, host_url: v.host_url as string, description: v.description as string, metadata: v.metadata as Record<string, unknown>, password: v.password as string, totp: v.totp as string | undefined })
 }

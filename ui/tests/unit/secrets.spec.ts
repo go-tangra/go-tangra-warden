@@ -5,6 +5,7 @@ import SecretsView from '@/views/secrets/index.vue'
 import SecretDetails from '@/components/SecretDetails.vue'
 import VersionDrawer from '@/components/VersionDrawer.vue'
 import { useSecrets } from '@/stores/secrets'
+import { useToast } from '@go-tangra/ui'
 import { ApiError, describe as describeError } from '@/api/client'
 import { click, folder, mountInLayout, node, secret, stubFetch, type, viewer } from './helpers'
 import { secretCreateSchema, secretUpdateSchema } from '@/schemas'
@@ -177,6 +178,52 @@ describe('secrets view', () => {
     expect(w.findAll('[data-test="folder-row"]').length).toBe(0)
     expect(w.text()).toContain('of 30')
     for (const c of calls) expect(c).not.toContain('password')
+    w.unmount()
+  })
+
+  it('shows each folder\'s secret count from the tree', async () => {
+    stubFetch((url) => {
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node({ ...infra, secret_count: 3 })] } }
+      return { status: 200, body: { items: [], total: 0 } }
+    })
+    const w = mountInLayout(SecretsView, {})
+    await flushPromises()
+    expect(w.find('[data-test="folder-row"]').text()).toContain('3 secret(s)')
+    expect(w.findAll('[role=treeitem]').find((i) => i.text().startsWith('Infra'))!.text()).toContain('3')
+    w.unmount()
+  })
+
+  it('a refused move (missing folder) shows an error toast, no success, and changes nothing', async () => {
+    useToast().clear()
+    const calls: string[] = []
+    stubFetch((url, init) => {
+      calls.push((init?.method ?? 'GET') + ' ' + url)
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra), node(folder('f2', 'Gone', '/Gone'))] } }
+      if (url === '/api/warden/v1/secrets/s1/move') return { status: 404, body: { reason: 'not_found' } }
+      if (url === '/api/warden/v1/secrets/s1' && init?.method === 'PUT') return { status: 200, body: db }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: url.includes('folder_id=f1') ? [db] : [], total: url.includes('folder_id=f1') ? 1 : 0 } }
+      return { status: 404, body: { reason: 'not_found' } }
+    })
+    const w = mountInLayout(SecretsView, {})
+    await flushPromises()
+    await w.findAll('[role=treeitem]').find((i) => i.text() === 'Infra')!.trigger('click')
+    await flushPromises()
+    await w.find('[data-test="secret-row"]').trigger('click')
+    await flushPromises()
+    const drawer = document.body.querySelector('aside[role=dialog]')!
+    const sel = drawer.querySelector<HTMLSelectElement>('select[data-field="folder_id"]')!
+    sel.value = 'f2'
+    sel.dispatchEvent(new Event('change'))
+    await flushPromises()
+    ;(Array.from(drawer.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(calls).toContain('POST /api/warden/v1/secrets/s1/move')
+    // The move is tried first: when it is refused nothing else is written.
+    expect(calls).not.toContain('PUT /api/warden/v1/secrets/s1')
+    const toasts = useToast().items
+    expect(toasts.some((t) => t.kind === 'success')).toBe(false)
+    expect(toasts.some((t) => t.kind === 'error' && t.title === 'Secret not moved' && /does not exist/.test(t.text))).toBe(true)
+    expect(useSecrets().items.find((i) => i.id === 's1')?.folder_id).toBe('f1')
     w.unmount()
   })
 

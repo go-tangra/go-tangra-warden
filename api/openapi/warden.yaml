@@ -210,7 +210,7 @@ paths:
       x-freya-permission: folders:manage
       parameters: [{ $ref: '#/components/parameters/csrf' }, { $ref: '#/components/parameters/id' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, properties: { parent_id: { type: [string, 'null'], format: uuid } } } } } }
-      responses: { '200': { description: 'moved; subtree paths and ancestors rewritten' }, '409': { description: 'cycle or sibling name' } }
+      responses: { '200': { description: 'moved; subtree paths and ancestors rewritten' }, '403': { description: 'forbidden: no write on the folder, or the new parent is readable but not writable' }, '404': { description: 'not_found: the folder, or the new parent is missing, of another tenant or not readable by the caller (never revealed); nothing changes' }, '409': { description: 'cycle or sibling name' } }
   /api/warden/v1/folders/{id}/remove:
     post:
       operationId: deleteFolder
@@ -255,7 +255,7 @@ paths:
       x-freya-permission: secrets:write
       parameters: [{ $ref: '#/components/parameters/csrf' }, { $ref: '#/components/parameters/id' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, properties: { folder_id: { type: [string, 'null'], format: uuid } } } } } }
-      responses: { '200': { description: 'moved (write on the secret and on the target folder)' } }
+      responses: { '200': { description: 'moved (write on the secret and on the target folder)' }, '403': { description: 'forbidden: no write on the secret, or the target folder is readable but not writable' }, '404': { description: 'not_found: the secret, or the target folder is missing, of another tenant or not readable by the caller (never revealed); the secret stays where it was' } }
   /api/warden/v1/secrets/{id}/password:
     get: { operationId: revealPassword, x-freya-permission: secrets:read, description: 'material; audited with the version', parameters: [{ $ref: '#/components/parameters/id' }, { name: version, in: query, schema: { type: integer, minimum: 1 } }], responses: { '200': { description: 'password, version' }, '503': { description: vault_unavailable } } }
     put:

@@ -867,13 +867,17 @@ func (s *Service) Restore(ctx context.Context, subj authz.Subjects, id string, v
 	return nv, nil
 }
 
-// Move changes the folder; write on the secret and on the target folder.
+// Move changes the folder; write on the secret and on the target folder. A
+// target that does not exist in the tenant, or that the caller cannot read,
+// is ErrNotFound (never revealing it); the store re-checks the target in the
+// same statement, so a folder deleted meanwhile is ErrNotFound too and the
+// secret stays where it was.
 func (s *Service) Move(ctx context.Context, subj authz.Subjects, id string, folderID *string) (View, error) {
 	if _, err := s.az.Require(ctx, subj, authz.Secret, id, authz.Write); err != nil {
 		return View{}, err
 	}
 	if folderID != nil {
-		if _, err := s.az.Require(ctx, subj, authz.Folder, *folderID, authz.Write); err != nil {
+		if _, err := s.az.RequireTarget(ctx, subj, authz.Folder, *folderID, authz.Write); err != nil {
 			return View{}, err
 		}
 	}

@@ -75,6 +75,10 @@ func (d *DB) MoveFolder(ctx context.Context, tid, id string, parent *string, anc
 func (d *DB) DeleteFolder(ctx context.Context, tid, id string) error {
 	return d.tenant(ctx, tid, func(tx pgx.Tx) error { return store.DeleteFolder(ctx, tx, tid, id) })
 }
+func (d *DB) FolderSecretCounts(ctx context.Context, tid string) (out map[string]int, err error) {
+	err = d.tenant(ctx, tid, func(tx pgx.Tx) error { out, err = store.FolderSecretCounts(ctx, tx, tid); return err })
+	return
+}
 func (d *DB) CountFolderContents(ctx context.Context, tid, id string) (f, s int, err error) {
 	err = d.tenant(ctx, tid, func(tx pgx.Tx) error { f, s, err = store.CountFolderContents(ctx, tx, tid, id); return err })
 	return

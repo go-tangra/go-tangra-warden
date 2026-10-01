@@ -273,3 +273,97 @@ func TestSecretRoutes(t *testing.T) {
 		}
 	}
 }
+
+// TestMoveTargetsAndFolderCounts: a move to a folder that is missing, of
+// another tenant or unreadable is 404 not_found (a read-only one 403) and the
+// secret stays put; the folder tree carries the live secret count of every
+// folder, for the owner and for a user reading through an ancestor grant,
+// and agrees with the folder page total.
+func TestMoveTargetsAndFolderCounts(t *testing.T) {
+	st := newStory(t)
+	mk := func(tok, body string) string {
+		t.Helper()
+		code, out := st.call(tok, "POST", "/api/warden/v1/folders", body)
+		if code != 201 {
+			t.Fatalf("folder %s: %d %v", body, code, out)
+		}
+		return out["id"].(string)
+	}
+	infra := mk(st.alice, `{"name":"Infra"}`)
+	dbs := mk(st.alice, `{"parent_id":"`+infra+`","name":"Databases"}`)
+	bobs := mk(st.bob, `{"name":"BobOnly"}`)
+	foreign := mk(st.other, `{"name":"Foreign"}`)
+	var id string
+	for i := 0; i < 3; i++ {
+		code, out := st.call(st.alice, "POST", "/api/warden/v1/secrets", `{"folder_id":"`+dbs+`","name":"db-`+string(rune('a'+i))+`","password":"p"}`)
+		if code != 201 {
+			t.Fatalf("seed: %d %v", code, out)
+		}
+		id = out["id"].(string)
+	}
+	for _, target := range []string{"0190f7c2-6a3e-7c1a-9b2e-000000000000", foreign, bobs} {
+		if code, out := st.call(st.alice, "POST", "/api/warden/v1/secrets/"+id+"/move", `{"folder_id":"`+target+`"}`); code != 404 || out["reason"] != "not_found" {
+			t.Fatalf("move to %s: %d %v", target, code, out)
+		}
+	}
+	if code, out := st.call(st.alice, "POST", "/api/warden/v1/folders/"+dbs+"/move", `{"parent_id":"`+foreign+`"}`); code != 404 || out["reason"] != "not_found" {
+		t.Fatalf("folder move to foreign: %d %v", code, out)
+	}
+	// Bob reads Infra (viewer) and so Databases, but may not write there.
+	if code, out := st.call(st.alice, "POST", "/api/warden/v1/grants", `{"resource_type":"folder","resource_id":"`+infra+`","subject_type":"user","subject_id":"`+uB+`","relation":"viewer"}`); code != 201 {
+		t.Fatalf("grant: %d %v", code, out)
+	}
+	code, mine := st.call(st.bob, "POST", "/api/warden/v1/secrets", `{"folder_id":"`+bobs+`","name":"mine","password":"p"}`)
+	if code != 201 {
+		t.Fatalf("bob seed: %d %v", code, mine)
+	}
+	if code, out := st.call(st.bob, "POST", "/api/warden/v1/secrets/"+mine["id"].(string)+"/move", `{"folder_id":"`+dbs+`"}`); code != 403 || out["reason"] != "forbidden" {
+		t.Fatalf("bob move to read-only: %d %v", code, out)
+	}
+	if _, out := st.call(st.alice, "GET", "/api/warden/v1/secrets/"+id, ""); out["folder_id"] != dbs {
+		t.Fatalf("refused moves changed the folder: %v", out["folder_id"])
+	}
+	// Counts in the tree for alice (owner) and bob (inherited viewer).
+	count := func(tok, folderID string) float64 {
+		t.Helper()
+		code, out := st.call(tok, "GET", "/api/warden/v1/folders/tree", "")
+		if code != 200 {
+			t.Fatalf("tree: %d %v", code, out)
+		}
+		var walk func([]any) float64
+		walk = func(nodes []any) float64 {
+			for _, n := range nodes {
+				m := n.(map[string]any)
+				if f := m["folder"].(map[string]any); f["id"] == folderID {
+					return f["secret_count"].(float64)
+				}
+				if v := walk(m["children"].([]any)); v >= 0 {
+					return v
+				}
+			}
+			return -1
+		}
+		return walk(out["items"].([]any))
+	}
+	for name, tok := range map[string]string{"alice": st.alice, "bob": st.bob} {
+		if n := count(tok, dbs); n != 3 {
+			t.Fatalf("%s: Databases count %v", name, n)
+		}
+		if n := count(tok, infra); n != 0 {
+			t.Fatalf("%s: Infra count %v", name, n)
+		}
+		if code, page := st.call(tok, "GET", "/api/warden/v1/secrets?folder_id="+dbs+"&page=1&page_size=25", ""); code != 200 || page["total"] != float64(3) || len(page["items"].([]any)) != 3 {
+			t.Fatalf("%s: page %d %v", name, code, page)
+		}
+	}
+	if n := count(st.bob, bobs); n != 1 {
+		t.Fatalf("bob: own folder count %v", n)
+	}
+	// Moving a secret updates both counts.
+	if code, out := st.call(st.alice, "POST", "/api/warden/v1/secrets/"+id+"/move", `{"folder_id":"`+infra+`"}`); code != 200 || out["folder_id"] != infra {
+		t.Fatalf("move: %d %v", code, out)
+	}
+	if count(st.bob, dbs) != 2 || count(st.bob, infra) != 1 {
+		t.Fatal("counts after move")
+	}
+}

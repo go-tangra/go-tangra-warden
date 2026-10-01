@@ -151,6 +151,56 @@ func TestLists(t *testing.T) {
 			t.Fatalf("legacy → %d %v", code, out)
 		}
 	})
+	t.Run("folder counts and refused moves", func(t *testing.T) {
+		// The tree carries each folder's live secret count, for the owner and
+		// for the viewer reading through the role grant on Infra alike.
+		counts := func(s *Session) map[string]float64 {
+			t.Helper()
+			code, out := s.JSON(http.MethodGet, "/api/warden/v1/folders/tree", nil)
+			if code != 200 {
+				t.Fatalf("%s tree → %d %v", s.Email, code, out)
+			}
+			got := map[string]float64{}
+			var walk func([]any)
+			walk = func(nodes []any) {
+				for _, n := range nodes {
+					m := n.(map[string]any)
+					f := m["folder"].(map[string]any)
+					got[f["id"].(string)] = f["secret_count"].(float64)
+					walk(m["children"].([]any))
+				}
+			}
+			walk(out["items"].([]any))
+			return got
+		}
+		if c := counts(owner); c[infra] != 4 || c[dbs] != 30 || c[private] != 2 || len(c) != 3 {
+			t.Fatalf("owner counts %v", c)
+		}
+		if c := counts(viewer); c[infra] != 4 || c[dbs] != 30 || len(c) != 2 {
+			t.Fatalf("viewer counts %v", c)
+		}
+		// Moves to a missing folder, another tenant's folder or one the caller
+		// cannot read are 404 (never revealed); a read-only one is 403. The
+		// secret stays where it was.
+		_, foreign := other.JSON(http.MethodPost, "/api/warden/v1/folders", map[string]any{"name": "Foreign"})
+		for _, c := range []struct {
+			s      *Session
+			target string
+			want   int
+		}{{owner, "0190f7c2-6a3e-7c1a-9b2e-000000000000", 404}, {owner, foreign["id"].(string), 404}, {viewer, private, 404}, {viewer, infra, 403}} {
+			code, out := c.s.JSON(http.MethodPost, "/api/warden/v1/secrets/"+root[3]+"/move", map[string]any{"folder_id": c.target})
+			if code != c.want {
+				t.Fatalf("%s move to %s → %d %v", c.s.Email, c.target, code, out)
+			}
+		}
+		if code, out := owner.JSON(http.MethodPost, "/api/warden/v1/folders/"+dbs+"/move", map[string]any{"parent_id": foreign["id"]}); code != 404 {
+			t.Fatalf("folder move to foreign → %d %v", code, out)
+		}
+		if code, out := owner.JSON(http.MethodGet, "/api/warden/v1/secrets/"+root[3], nil); code != 200 || out["folder_id"] != nil {
+			t.Fatalf("refused moves changed the secret → %d %v", code, out)
+		}
+		page(owner, "/api/warden/v1/secrets?root=true", 8, 1, 25, "name", "asc")
+	})
 	t.Run("search", func(t *testing.T) {
 		got := page(owner, "/api/warden/v1/secrets/search?q=r-", 8, 1, 25, "relevance", "desc")
 		if got[0] != "r-00" || got[len(got)-1] != "alpha" {

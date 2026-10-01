@@ -118,6 +118,16 @@ func conflict(err error) error {
 	return err
 }
 
+// missingRef maps a foreign-key violation (the referenced folder is gone) and
+// a malformed id to ErrNotFound.
+func missingRef(err error) error {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && (pg.Code == "23503" || pg.Code == "22P02") {
+		return ErrNotFound
+	}
+	return err
+}
+
 // InsertAuditRows implements audit.Inserter (system scope: the writer serves every tenant).
 func (s *Store) InsertAuditRows(ctx context.Context, rows []AuditRow) error {
 	return s.Tx(ctx, Scope{System: true}, func(tx pgx.Tx) error { return InsertAuditRows(ctx, tx, rows) })
