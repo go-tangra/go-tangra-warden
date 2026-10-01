@@ -532,14 +532,7 @@ func InsertAuditRows(ctx context.Context, tx pgx.Tx, rows []AuditRow) error {
 // are only cast when they look like UUIDs: refused requests may carry
 // arbitrary ids.
 func QueryAudit(ctx context.Context, tx pgx.Tx, tenantID, eventType, actorID string, from, to, cursor time.Time, limit int) ([]AuditRow, error) {
-	rows, err := tx.Query(ctx, `SELECT a.ts, a.tenant_id, a.event_type, a.actor_kind, a.actor_id, a.subject_kind, a.subject_id, a.outcome, a.reason, a.correlation_id, a.details,
-		COALESCE(CASE
-			WHEN a.subject_kind = 'share' AND (a.details->>'secret_id') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-				THEN (SELECT s.name FROM secrets s WHERE s.tenant_id = a.tenant_id AND s.id = (a.details->>'secret_id')::uuid)
-			WHEN a.subject_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN NULL
-			WHEN a.subject_kind = 'secret' THEN (SELECT s.name FROM secrets s WHERE s.tenant_id = a.tenant_id AND s.id = a.subject_id::uuid)
-			WHEN a.subject_kind = 'folder' THEN (SELECT f.path FROM folders f WHERE f.tenant_id = a.tenant_id AND f.id = a.subject_id::uuid) END, '')
-		FROM warden_audit_events a WHERE a.tenant_id = $1 AND ($2 = '' OR a.event_type = $2) AND ($3 = '' OR a.actor_id = $3)
+	rows, err := tx.Query(ctx, "SELECT "+auditCols+` FROM warden_audit_events a WHERE a.tenant_id = $1 AND ($2 = '' OR a.event_type = $2) AND ($3 = '' OR a.actor_id = $3)
 		AND a.ts >= $4 AND a.ts <= $5 AND ($6::timestamptz IS NULL OR a.ts < $6) ORDER BY a.ts DESC LIMIT $7`,
 		tenantID, eventType, actorID, from, to, nullTime(cursor), limit)
 	if err != nil {
@@ -548,13 +541,29 @@ func QueryAudit(ctx context.Context, tx pgx.Tx, tenantID, eventType, actorID str
 	defer rows.Close()
 	var out []AuditRow
 	for rows.Next() {
-		var r AuditRow
-		if err := rows.Scan(&r.TS, &r.TenantID, &r.EventType, &r.ActorKind, &r.ActorID, &r.SubjectKind, &r.SubjectID, &r.Outcome, &r.Reason, &r.CorrelationID, &r.Details, &r.SubjectName); err != nil {
+		r, err := scanAuditRow(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// auditCols are the selected columns of an audit event (alias a) with the
+// subject name resolution of QueryAudit.
+const auditCols = `a.ts, a.tenant_id, a.event_type, a.actor_kind, a.actor_id, a.subject_kind, a.subject_id, a.outcome, a.reason, a.correlation_id, a.details,
+		COALESCE(CASE
+			WHEN a.subject_kind = 'share' AND (a.details->>'secret_id') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+				THEN (SELECT s.name FROM secrets s WHERE s.tenant_id = a.tenant_id AND s.id = (a.details->>'secret_id')::uuid)
+			WHEN a.subject_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN NULL
+			WHEN a.subject_kind = 'secret' THEN (SELECT s.name FROM secrets s WHERE s.tenant_id = a.tenant_id AND s.id = a.subject_id::uuid)
+			WHEN a.subject_kind = 'folder' THEN (SELECT f.path FROM folders f WHERE f.tenant_id = a.tenant_id AND f.id = a.subject_id::uuid) END, '')`
+
+func scanAuditRow(rows pgx.Rows) (AuditRow, error) {
+	var r AuditRow
+	err := rows.Scan(&r.TS, &r.TenantID, &r.EventType, &r.ActorKind, &r.ActorID, &r.SubjectKind, &r.SubjectID, &r.Outcome, &r.Reason, &r.CorrelationID, &r.Details, &r.SubjectName)
+	return r, err
 }
 
 func nullTime(t time.Time) *time.Time {

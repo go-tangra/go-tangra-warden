@@ -5,7 +5,6 @@ package memstore
 
 import (
 	"context"
-	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -911,27 +910,7 @@ func (m *Store) QueryAudit(_ context.Context, tid, et, actor string, from, to, c
 		if r.TenantID != tid || (et != "" && r.EventType != et) || (actor != "" && r.ActorID != actor) || r.TS.Before(from) || r.TS.After(to) || (!cursor.IsZero() && !r.TS.Before(cursor)) {
 			continue
 		}
-		// Same resolution as store.QueryAudit: existing secrets and folders by name,
-		// shares by the shared secret's name.
-		switch r.SubjectKind {
-		case "secret":
-			if s, ok := m.Secrets[r.SubjectID]; ok && s.TenantID == tid {
-				r.SubjectName = s.Name
-			}
-		case "folder":
-			if f, ok := m.Folders[r.SubjectID]; ok && f.TenantID == tid {
-				r.SubjectName = f.Path
-			}
-		case "share":
-			var d struct {
-				SecretID string `json:"secret_id"`
-			}
-			if json.Unmarshal(r.Details, &d) == nil {
-				if s, ok := m.Secrets[d.SecretID]; ok && s.TenantID == tid {
-					r.SubjectName = s.Name
-				}
-			}
-		}
+		r = m.resolveSubject(tid, r)
 		out = append(out, r)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].TS.After(out[j].TS) })
