@@ -298,6 +298,24 @@ func (a *Authz) Require(ctx context.Context, s Subjects, resourceType, resourceI
 	return d, nil
 }
 
+// RequireTarget is Require for the destination of a move: a target the
+// subjects cannot even read is ErrNotFound, like a missing one or one in
+// another tenant, so a refusal never reveals that it exists. A readable
+// target without the permission is ErrForbidden.
+func (a *Authz) RequireTarget(ctx context.Context, s Subjects, resourceType, resourceID, permission string) (Decision, error) {
+	d, err := a.Check(ctx, s, resourceType, resourceID, permission)
+	if err != nil {
+		return d, err
+	}
+	if !d.Permissions.Read {
+		return Decision{}, ErrNotFound
+	}
+	if !d.Allowed {
+		return d, ErrForbidden
+	}
+	return d, nil
+}
+
 // PermissionsOn returns the permissions the subjects hold on a resource
 // without auditing (listing decoration).
 func (a *Authz) PermissionsOn(ctx context.Context, s Subjects, resourceType, resourceID string) (Permissions, error) {

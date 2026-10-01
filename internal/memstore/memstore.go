@@ -266,6 +266,11 @@ func (m *Store) MoveFolder(_ context.Context, tid, id string, parent *string, an
 	if !ok || f.TenantID != tid {
 		return store.ErrNotFound
 	}
+	if parent != nil {
+		if p, ok := m.Folders[*parent]; !ok || p.TenantID != tid {
+			return store.ErrNotFound
+		}
+	}
 	for _, o := range m.Folders {
 		if o.ID != id && o.TenantID == tid && sameParent(o.ParentID, parent) && strings.EqualFold(o.Name, f.Name) {
 			return store.ErrConflict
@@ -333,11 +338,26 @@ func (m *Store) CountFolderContents(_ context.Context, tid, id string) (int, int
 		}
 	}
 	for _, s := range m.Secrets {
-		if s.TenantID == tid && s.FolderID != nil && *s.FolderID == id {
+		if s.TenantID == tid && s.FolderID != nil && *s.FolderID == id && s.DeletedAt == nil {
 			ns++
 		}
 	}
 	return nf, ns, nil
+}
+
+func (m *Store) FolderSecretCounts(_ context.Context, tid string) (map[string]int, error) {
+	if err := m.fail("FolderSecretCounts"); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]int{}
+	for _, s := range m.Secrets {
+		if s.TenantID == tid && s.FolderID != nil && s.DeletedAt == nil {
+			out[*s.FolderID]++
+		}
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------- secrets
@@ -521,6 +541,14 @@ func (m *Store) SetSecretTOTP(_ context.Context, tid, id string, has bool, by *s
 }
 
 func (m *Store) MoveSecret(_ context.Context, tid, id string, folder *string, by *string) error {
+	if folder != nil {
+		m.mu.Lock()
+		f, ok := m.Folders[*folder]
+		m.mu.Unlock()
+		if !ok || f.TenantID != tid { // like the store: the target must be a folder of the tenant
+			return store.ErrNotFound
+		}
+	}
 	return m.mutateSecret("MoveSecret", tid, id, func(s *store.Secret) { s.FolderID, s.UpdatedBy = folder, by })
 }
 

@@ -208,6 +208,12 @@ func (s *Service) Tree(ctx context.Context, subj authz.Subjects) ([]*Node, error
 	if err != nil {
 		return nil, err
 	}
+	// Every folder in the tree is readable, and under a readable folder every
+	// secret is readable, so the live count is what the caller can open.
+	counts, err := s.st.FolderSecretCounts(ctx, subj.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	grants, err := s.st.GrantsForSubjects(ctx, subj.TenantID, subj.UserID, subj.Roles, s.now())
 	if err != nil {
 		return nil, err
@@ -231,7 +237,7 @@ func (s *Service) Tree(ctx context.Context, subj authz.Subjects) ([]*Node, error
 		if !p.Read {
 			continue
 		}
-		n := &Node{Folder: view(f, p, 0), Children: []*Node{}}
+		n := &Node{Folder: view(f, p, counts[f.ID]), Children: []*Node{}}
 		nodes[f.ID] = n
 		if f.ParentID != nil {
 			if parent, ok := nodes[*f.ParentID]; ok {
@@ -263,7 +269,8 @@ func (s *Service) Rename(ctx context.Context, subj authz.Subjects, id, name stri
 }
 
 // Move re-parents a folder (nil = root); write on the folder and on the new
-// parent are required; cycles are refused.
+// parent are required; cycles are refused. A parent that does not exist in
+// the tenant, or that the caller cannot read, is ErrNotFound.
 func (s *Service) Move(ctx context.Context, subj authz.Subjects, id string, newParent *string) (View, error) {
 	if _, err := s.az.Require(ctx, subj, authz.Folder, id, authz.Write); err != nil {
 		return View{}, err
@@ -278,7 +285,8 @@ func (s *Service) Move(ctx context.Context, subj authz.Subjects, id string, newP
 		if *newParent == id {
 			return View{}, ErrCycle
 		}
-		if _, err := s.az.Require(ctx, subj, authz.Folder, *newParent, authz.Write); err != nil {
+		// A parent that is missing or unreadable is not found (never revealed).
+		if _, err := s.az.RequireTarget(ctx, subj, authz.Folder, *newParent, authz.Write); err != nil {
 			return View{}, err
 		}
 		parent, err := s.st.GetFolder(ctx, subj.TenantID, *newParent)

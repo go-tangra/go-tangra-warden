@@ -24,6 +24,7 @@ type Folders interface {
 	MoveFolder(ctx context.Context, tenantID, id string, newParent *string, newAncestors []string, newPath, updatedBy string) error
 	DeleteFolder(ctx context.Context, tenantID, id string) error
 	CountFolderContents(ctx context.Context, tenantID, id string) (folders, secrets int, err error)
+	FolderSecretCounts(ctx context.Context, tenantID string) (map[string]int, error)
 }
 
 // Secrets is the secret metadata persistence (never material).

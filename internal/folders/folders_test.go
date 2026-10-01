@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-tangra/go-tangra-warden/v4/internal/audit"
 	"github.com/go-tangra/go-tangra-warden/v4/internal/authz"
@@ -136,14 +137,35 @@ func TestCreateAndTree(t *testing.T) {
 	if _, err := f.ms.UpsertGrant(ctx, store.Grant{ID: store.NewID(), TenantID: tA, ResourceType: "folder", ResourceID: db.ID, SubjectType: "role", SubjectID: "ops", Relation: "viewer"}); err != nil {
 		t.Fatal(err)
 	}
+	// A soft-deleted secret (vault destroy pending) is not counted.
+	gone := time.Now()
+	if err := f.ms.InsertSecret(ctx, store.Secret{ID: store.NewID(), TenantID: tA, FolderID: &prod.ID, Name: "gone", VaultPath: "p", DeletedAt: &gone}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := f.svc.Get(ctx, alice, prod.ID); v.SecretCount != 1 {
+		t.Fatalf("get counts a deleted secret: %d", v.SecretCount)
+	}
 	tree, err := f.svc.Tree(ctx, bob)
 	if err != nil || len(tree) != 1 || tree[0].Folder.ID != db.ID || len(tree[0].Children) != 1 || tree[0].Children[0].Folder.ID != prod.ID || tree[0].Children[0].Folder.Permissions.Write {
 		t.Fatalf("%+v %v", tree, err)
+	}
+	// The tree carries each folder's live secret count, for the owner and for
+	// a user reading through an inherited (ancestor) grant alike.
+	if n := tree[0].Children[0].Folder.SecretCount; n != 1 {
+		t.Fatalf("bob tree count %d", n)
 	}
 	tree, _ = f.svc.Tree(ctx, alice)
 	if len(tree) != 1 || tree[0].Folder.ID != infra.ID || len(tree[0].Children[0].Children) != 1 {
 		t.Fatalf("%+v", tree)
 	}
+	if n := tree[0].Children[0].Children[0].Folder.SecretCount; n != 1 || tree[0].Folder.SecretCount != 0 {
+		t.Fatalf("alice tree counts %d %d", n, tree[0].Folder.SecretCount)
+	}
+	f.ms.FailOn("FolderSecretCounts", errors.New("db"))
+	if _, err := f.svc.Tree(ctx, alice); err == nil {
+		t.Fatal("tree count error")
+	}
+	f.ms.FailOn("FolderSecretCounts", nil)
 	if tree, _ := f.svc.Tree(ctx, other); len(tree) != 0 {
 		t.Fatal("foreign tree")
 	}
@@ -252,8 +274,33 @@ func TestRenameMoveDelete(t *testing.T) {
 	if _, err := f.ms.UpsertGrant(ctx, store.Grant{ID: store.NewID(), TenantID: tA, ResourceType: "folder", ResourceID: db.ID, SubjectType: "user", SubjectID: uB, Relation: "editor"}); err != nil {
 		t.Fatal(err)
 	}
+	// A target bob cannot read is not found (never revealed); a missing one
+	// or one of another tenant too; a readable but read-only one is forbidden.
+	if _, err := f.svc.Move(ctx, bob, db.ID, &archive.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move bob unreadable target: %v", err)
+	}
+	missing := store.NewID()
+	if _, err := f.svc.Move(ctx, alice, db.ID, &missing); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move to missing parent: %v", err)
+	}
+	foreign := store.Folder{ID: store.NewID(), TenantID: tB, Name: "Foreign", Path: "/Foreign"}
+	if err := f.ms.InsertFolder(ctx, foreign); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Move(ctx, alice, db.ID, &foreign.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("move to foreign parent: %v", err)
+	}
+	if err := f.ms.MoveFolder(ctx, tA, db.ID, &foreign.ID, []string{foreign.ID}, "/Foreign/Databases", uA); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("store move to foreign parent: %v", err)
+	}
+	if _, err := f.ms.UpsertGrant(ctx, store.Grant{ID: store.NewID(), TenantID: tA, ResourceType: "folder", ResourceID: archive.ID, SubjectType: "user", SubjectID: uB, Relation: "viewer"}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.svc.Move(ctx, bob, db.ID, &archive.ID); !errors.Is(err, ErrForbidden) {
-		t.Fatal("move bob target")
+		t.Fatal("move bob read-only target")
+	}
+	if g, _ := f.svc.Get(ctx, alice, db.ID); g.Path != "/Infrastructure/Databases" {
+		t.Fatalf("refused moves changed the folder: %s", g.Path)
 	}
 	v, err = f.svc.Move(ctx, alice, db.ID, &archive.ID)
 	if err != nil || v.Path != "/Archive/Databases" {
