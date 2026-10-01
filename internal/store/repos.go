@@ -233,13 +233,14 @@ func AllSecrets(ctx context.Context, tx pgx.Tx, tenantID string, limit int) ([]S
 	return scanSecrets(rows)
 }
 
-// SearchSecrets matches the generated search column and folder paths, limited
+// SearchSecrets matches q literally (EscapeLike) against the generated search
+// column and folder paths, limited
 // to the given accessible secret ids / folder ids (either list may be empty).
 func SearchSecrets(ctx context.Context, tx pgx.Tx, tenantID, q string, secretIDs, folderIDs []string, includeRoot bool, limit int) ([]Secret, error) {
 	rows, err := tx.Query(ctx, "SELECT "+secretCols+secretFrom+`WHERE s.tenant_id = $1 AND s.deleted_at IS NULL
-		AND (s.search LIKE '%' || lower($2) || '%' OR lower(coalesce(f.path,'')) LIKE '%' || lower($2) || '%')
+		AND (s.search LIKE '%' || lower($2) || '%' ESCAPE '\' OR lower(coalesce(f.path,'')) LIKE '%' || lower($2) || '%' ESCAPE '\')
 		AND (s.id = ANY($3::uuid[]) OR s.folder_id = ANY($4::uuid[]) OR ($5 AND s.folder_id IS NULL))
-		ORDER BY (lower(s.name) LIKE '%' || lower($2) || '%') DESC, lower(s.name) LIMIT $6`, tenantID, q, nonNil(secretIDs), nonNil(folderIDs), includeRoot, limit)
+		ORDER BY (lower(s.name) LIKE '%' || lower($2) || '%' ESCAPE '\') DESC, lower(s.name) LIMIT $6`, tenantID, EscapeLike(q), nonNil(secretIDs), nonNil(folderIDs), includeRoot, limit)
 	if err != nil {
 		return nil, err
 	}

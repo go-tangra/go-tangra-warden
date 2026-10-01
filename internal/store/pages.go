@@ -53,7 +53,15 @@ func scanSecretRow(r pgx.Rows) (Secret, error) { return scanSecret(r) }
 // scope makes visible.
 func PageSecretsInFolder(ctx context.Context, tx pgx.Tx, tenantID string, folderID *string, scope SecretScope, req listquery.Request) ([]Secret, int, listquery.Request, error) {
 	req = ListRequest(req, SecretList)
-	where := "s.tenant_id = $1 AND s.folder_id IS NOT DISTINCT FROM $2 AND s.deleted_at IS NULL AND " + fmt.Sprintf(secretVisible, 3, 4)
+	// A plain equality for a folder (IS NOT DISTINCT FROM cannot be an index
+	// condition) and IS NULL for the root let the indexes of migrations
+	// 0005/0006 deliver the page in order: (tenant_id, folder_id, <sort>, id)
+	// for a folder, the partial secrets_root_* indexes for the root.
+	folderCond := "s.folder_id = $2"
+	if folderID == nil {
+		folderCond = "s.folder_id IS NULL AND $2::uuid IS NULL"
+	}
+	where := "s.tenant_id = $1 AND " + folderCond + " AND s.deleted_at IS NULL AND " + fmt.Sprintf(secretVisible, 3, 4)
 	args := []any{tenantID, folderID, nonNil(scope.SecretIDs), nonNil(scope.FolderIDs)}
 	return pageQuery(ctx, tx, secretCols, secretPageFrom, where, args, req, func(r listquery.Request) string { return r.OrderBy(SecretList) }, scanSecretRow)
 }
@@ -73,12 +81,13 @@ func SearchOrderBy(r listquery.Request) string {
 
 // PageSearchSecrets pages the live secrets matching q (name, username, host,
 // description or folder path; never material) the scope makes visible. q is
-// $2 of both queries (SearchRelevanceExpr).
+// matched literally (EscapeLike) and is $2 of both queries
+// (SearchRelevanceExpr).
 func PageSearchSecrets(ctx context.Context, tx pgx.Tx, tenantID, q string, scope SecretScope, req listquery.Request) ([]Secret, int, listquery.Request, error) {
 	req = ListRequest(req, SecretSearchList)
 	where := `s.tenant_id = $1 AND s.deleted_at IS NULL
-		AND (s.search LIKE '%' || lower($2) || '%' OR lower(coalesce(f.path,'')) LIKE '%' || lower($2) || '%') AND ` + fmt.Sprintf(secretVisible, 3, 4)
-	args := []any{tenantID, q, nonNil(scope.SecretIDs), nonNil(scope.FolderIDs)}
+		AND (s.search LIKE '%' || lower($2) || '%' ESCAPE '\' OR lower(coalesce(f.path,'')) LIKE '%' || lower($2) || '%' ESCAPE '\') AND ` + fmt.Sprintf(secretVisible, 3, 4)
+	args := []any{tenantID, EscapeLike(q), nonNil(scope.SecretIDs), nonNil(scope.FolderIDs)}
 	return pageQuery(ctx, tx, secretCols, secretPageFrom, where, args, req, SearchOrderBy, scanSecretRow)
 }
 
@@ -96,6 +105,15 @@ func PageAudit(ctx context.Context, tx pgx.Tx, tenantID string, f AuditQuery, re
 	return pageQuery(ctx, tx, auditCols, "warden_audit_events a", "a.tenant_id = $1 AND ($2 = '' OR a.event_type = $2) AND ($3 = '' OR a.actor_id = $3) AND a.ts >= $4 AND a.ts <= $5",
 		[]any{tenantID, f.EventType, f.ActorID, f.From, f.To}, req, func(r listquery.Request) string { return r.OrderBy(AuditList) }, scanAuditRow)
 }
+
+// EscapeLike escapes the LIKE wildcards in a search term (032 security review
+// F-4) so % and _ match themselves; the queries use ESCAPE '\'. The caller
+// caps the term's length (secrets.SearchMax).
+func EscapeLike(q string) string {
+	return likeEscaper.Replace(q)
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // qualify prefixes every column of a comma-separated list.
 func qualify(cols, prefix string) string {
