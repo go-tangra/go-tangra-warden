@@ -38,12 +38,12 @@ func serveList[T any](s *Server, w http.ResponseWriter, r *http.Request, spec li
 	if legacy != nil && listquery.Legacy(q) {
 		out, err := legacy()
 		if err != nil {
-			Fail(w, r, s.rt.Logger(), mapErr(err))
+			s.failList(w, r, mapErr, err)
 			return
 		}
 		count, err := paged(store.ListRequest(listquery.Request{PageSize: 1}, spec))
 		if err != nil {
-			Fail(w, r, s.rt.Logger(), mapErr(err))
+			s.failList(w, r, mapErr, err)
 			return
 		}
 		out["total"] = count.Total
@@ -62,10 +62,22 @@ func serveList[T any](s *Server, w http.ResponseWriter, r *http.Request, spec li
 	}
 	pg, err := paged(req)
 	if err != nil {
-		Fail(w, r, s.rt.Logger(), mapErr(err))
+		s.failList(w, r, mapErr, err)
 		return
 	}
 	WriteJSON(w, http.StatusOK, pg)
+}
+
+// failList answers a service error of a list: a *listquery.Error (e.g. the
+// audit span cap on from) is 422 validation_failed naming the parameter
+// only; anything else goes through mapErr.
+func (s *Server) failList(w http.ResponseWriter, r *http.Request, mapErr func(error) error, err error) {
+	var le *listquery.Error
+	if errors.As(err, &le) {
+		WriteDetail(w, ErrListParam, map[string]any{"param": le.Param})
+		return
+	}
+	Fail(w, r, s.rt.Logger(), mapErr(err))
 }
 
 // legacyPage is the old cursor shape: items and, when there is more, the

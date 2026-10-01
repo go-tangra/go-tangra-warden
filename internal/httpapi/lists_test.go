@@ -375,4 +375,22 @@ func TestAuditPagedWindow(t *testing.T) {
 	if code, out := st.call(st.alice, "GET", "/api/warden/v1/audit?event_type=nope", ""); code != 400 || out["reason"] != "validation_failed" {
 		t.Fatalf("bad type: %d %v", code, out)
 	}
+	// A window wider than 90 days is 422 {param: from} on both paths without
+	// echoing the value; exactly 90 days passes (security review F-2).
+	rfc := func(t time.Time) string { return url.QueryEscape(t.UTC().Format(time.RFC3339)) }
+	end := now.Add(time.Hour)
+	wide := "from=" + rfc(end.Add(-91*24*time.Hour)) + "&to=" + rfc(end)
+	for _, q := range []string{wide, wide + "&page=1", wide + "&cursor=", "from=1970-01-01T00:00:00Z", "from=1970-01-01T00:00:00Z&limit=5"} {
+		code, out := st.call(st.alice, "GET", "/api/warden/v1/audit?"+q, "")
+		d, _ := out["detail"].(map[string]any)
+		if code != 422 || out["reason"] != "validation_failed" || d["param"] != "from" || strings.Contains(fmt.Sprint(out), "1970") {
+			t.Fatalf("span %s: %d %v", q, code, out)
+		}
+	}
+	ok := "from=" + rfc(end.Add(-90*24*time.Hour)) + "&to=" + rfc(end)
+	for _, q := range []string{ok, ok + "&cursor="} {
+		if code, out := st.call(st.alice, "GET", "/api/warden/v1/audit?"+q, ""); code != 200 {
+			t.Fatalf("90 days %s: %d %v", q, code, out)
+		}
+	}
 }

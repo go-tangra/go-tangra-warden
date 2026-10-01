@@ -64,6 +64,11 @@ const AuditTieBreak = "a.event_type, a.actor_kind, a.actor_id, a.subject_kind, a
 // (research D6): exact counts over a bounded slice of the hypertable.
 const AuditWindow = 7 * 24 * time.Hour
 
+// MaxAuditSpan caps an explicit [from, to] audit window (032 security review
+// F-2): a wide from would otherwise force an exact count and OFFSET over the
+// whole hypertable on every page.
+const MaxAuditSpan = 90 * 24 * time.Hour
+
 // ListRequest completes r with the Spec's defaults (a zero Request from an
 // internal caller pages with the defaults); an invalid hand-built Request
 // falls back to the defaults entirely.

@@ -17,7 +17,7 @@ import VersionDrawer from '@/components/VersionDrawer.vue'
 import BitwardenImportDialog from '@/components/BitwardenImportDialog.vue'
 import { downloadJSON } from '@/api/download'
 import type { TransferReport } from '@/stores/transfer'
-import { secretCreateSchema, secretUpdateSchema, searchSchema, auditFilterSchema } from '@/schemas'
+import { secretCreateSchema, secretUpdateSchema, searchSchema, auditFilterSchema, MAX_AUDIT_SPAN_DAYS } from '@/schemas'
 
 const secrets = useSecrets()
 const folders = useFolders()
@@ -308,13 +308,14 @@ const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.
           <div class="grid grid-cols-2 gap-2 md:grid-cols-12 md:items-end">
             <div class="md:col-span-3"><UiInput v-bind="auditFilter.field('event_type')" label="Event type" size="sm" data-test="audit-type" @enter="auditFilter.submit()" /></div>
             <div class="md:col-span-3"><UiInput v-bind="auditFilter.field('actor_id')" label="Actor" size="sm" data-test="audit-actor" @enter="auditFilter.submit()" /></div>
-            <div class="md:col-span-2"><UiInput v-bind="auditFilter.field('from')" label="From" type="date" size="sm" /></div>
-            <div class="md:col-span-2"><UiInput v-bind="auditFilter.field('to')" label="To" type="date" size="sm" /></div>
+            <div class="md:col-span-2"><UiInput v-bind="auditFilter.field('from')" label="From" type="date" size="sm" data-test="audit-from" /></div>
+            <div class="md:col-span-2"><UiInput v-bind="auditFilter.field('to')" label="To" type="date" size="sm" data-test="audit-to" /></div>
             <div class="col-span-2 md:col-span-2"><UiButton type="submit" block size="sm" data-test="audit-apply">Apply</UiButton></div>
           </div>
         </UiForm>
+        <UiAlert v-if="ops.auditError" kind="error" class="mb-3" data-test="audit-error">{{ ops.auditError }}</UiAlert>
         <UiDataTable :items="auditRows" :columns="auditColumns" :loading="ops.auditLoading" :total="ops.auditTotal" :page="lqa.page.value" :page-size="lqa.pageSize.value" :sort="lqa.sort.value" caption="Audit events" empty-title="No events in this period" :row-attrs="() => ({ 'data-test': 'audit-row' })" @update:page="lqa.setPage" @update:page-size="lqa.setPageSize" @update:sort="lqa.setSort" />
-        <p class="mt-2 text-xs text-base-content/70" data-test="audit-window">Without a from date the last 7 days are shown.</p>
+        <p class="mt-2 text-xs text-base-content/70" data-test="audit-window">Without a from date the last 7 days are shown; a range covers at most {{ MAX_AUDIT_SPAN_DAYS }} days.</p>
       </UiCard>
     </template>
 

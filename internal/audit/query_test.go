@@ -79,6 +79,39 @@ func TestQueryPage(t *testing.T) {
 	}
 }
 
+// TestSpanCap: an explicit window wider than store.MaxAuditSpan is ErrSpan
+// naming from on both paths; exactly 90 days passes (security review F-2).
+func TestSpanCap(t *testing.T) {
+	now := time.Now()
+	q := &memQ{}
+	if store.MaxAuditSpan != 90*24*time.Hour {
+		t.Fatalf("MaxAuditSpan %v", store.MaxAuditSpan)
+	}
+	day := 24 * time.Hour
+	wide := []Filter{
+		{From: now.Add(-91 * day), To: now},
+		{From: now.Add(-91 * day)},
+		{From: time.Unix(0, 0)},
+	}
+	for _, f := range wide {
+		var le *listquery.Error
+		if _, err := QueryPage(context.Background(), q, "t", f, listquery.Request{}, now); !errors.As(err, &le) || le.Param != "from" {
+			t.Fatalf("paged %+v: %v", f, err)
+		}
+		if _, err := Query(context.Background(), q, "t", f); !errors.As(err, &le) || le.Param != "from" {
+			t.Fatalf("legacy %+v: %v", f, err)
+		}
+	}
+	for _, f := range []Filter{{From: now.Add(-90 * day), To: now}, {From: now.Add(-90 * day).Add(time.Second)}, {}, {To: now.Add(-365 * day)}} {
+		if _, err := QueryPage(context.Background(), q, "t", f, listquery.Request{}, now); err != nil {
+			t.Fatalf("paged %+v: %v", f, err)
+		}
+		if _, err := Query(context.Background(), q, "t", f); err != nil {
+			t.Fatalf("legacy %+v: %v", f, err)
+		}
+	}
+}
+
 func TestQuery(t *testing.T) {
 	base := time.Unix(1000, 0)
 	q := &memQ{}
