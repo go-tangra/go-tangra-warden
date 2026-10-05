@@ -96,6 +96,9 @@ async function loadCode(): Promise<void> {
     error.value = describe(e)
   }
 }
+// Share of the code's period still left (the countdown bar); low near the end.
+const remaining = computed(() => (code.value && code.value.period > 0 ? Math.max(0, Math.min(1, code.value.expires_in / code.value.period)) : 0))
+const expiring = computed(() => !!code.value && code.value.expires_in <= 5)
 function stopTimer(): void {
   if (timer) clearInterval(timer)
   timer = undefined
@@ -171,7 +174,10 @@ const shareColumns: Column<Share>[] = [
       <div v-if="secret.has_totp" class="mt-3 flex flex-wrap items-center gap-2" data-test="totp-row">
         <span class="text-sm text-base-content/70">One-time code</span>
         <output class="font-mono text-2xl tracking-widest" data-test="totp-code">{{ code?.code ?? '------' }}</output>
-        <span v-if="code" class="text-xs text-base-content/70" data-test="totp-expires">{{ code.expires_in }}s</span>
+        <span v-if="code" class="flex items-center gap-1.5" data-test="totp-countdown">
+          <progress class="progress h-1.5 w-20" :class="expiring ? 'progress-warning' : 'progress-primary'" :value="remaining * 100" max="100" :aria-label="'One-time code expires in ' + code.expires_in + ' seconds'" data-test="totp-progress" />
+          <span class="w-7 text-xs tabular-nums" :class="expiring ? 'text-warning' : 'text-base-content/70'" data-test="totp-expires">{{ code.expires_in }}s</span>
+        </span>
         <UiButton variant="soft" size="sm" data-test="totp-load" @click="loadCode">{{ code ? 'Refresh' : 'Show code' }}</UiButton>
         <UiButton variant="soft" size="sm" :icon="copied === 'totp' ? 'mdi-check' : 'mdi-content-copy'" aria-label="Copy one-time code" data-test="copy-totp" @click="copyCode">{{ copied === 'totp' ? 'Copied' : 'Copy' }}</UiButton>
         <UiButton v-if="canWrite" variant="text" size="sm" color="error" data-test="totp-remove" @click="dropTotp">Remove</UiButton>
