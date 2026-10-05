@@ -302,9 +302,14 @@ describe('secret create/edit (schema + drawer)', () => {
     await flushPromises()
     expect(panel.querySelector('[data-test="totp-code"]')!.textContent).toBe('654321')
     expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('2s')
+    const bar = () => panel.querySelector('[data-test="totp-progress"]') as HTMLProgressElement
+    expect(bar().value).toBeCloseTo((2 / 30) * 100)
+    expect(bar().getAttribute('aria-label')).toBe('One-time code expires in 2 seconds')
+    expect(bar().classList.contains('progress-warning')).toBe(true) // last 5 seconds
     vi.advanceTimersByTime(1000)
     await flushPromises()
     expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('1s')
+    expect(bar().value).toBeCloseTo((1 / 30) * 100)
     w.unmount()
     vi.useRealTimers()
   })
@@ -331,6 +336,11 @@ describe('secret create/edit (schema + drawer)', () => {
     click(panel, '[data-test="copy-totp"]')
     await flushPromises()
     expect(written).toEqual(['WARDEN-MARKER-PW-copy', '654321'])
+    // Plenty of time left: the countdown bar is not in the warning colour.
+    const bar = panel.querySelector('[data-test="totp-progress"]') as HTMLProgressElement
+    expect(bar.value).toBeCloseTo((20 / 30) * 100)
+    expect(bar.classList.contains('progress-primary')).toBe(true)
+    expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('20s')
     w.unmount()
   })
 
