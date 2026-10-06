@@ -40,19 +40,25 @@ test.describe('warden secrets', () => {
     await drawer.locator('input[data-field=totp]').fill('JBSWY3DPEHPK3PXP')
     await drawer.getByRole('button', { name: /^(Create|Save)$/ }).click()
     await expect(page.locator('.alert')).toContainText('Saved')
+    // Creating opens the new secret's read-only view.
+    const view = page.getByTestId('secret-view-drawer')
+    await expect(view).toBeVisible()
+    await page.keyboard.press('Escape')
     await expect(page.getByTestId('secret-row')).toHaveCount(1)
     // The list never carries material.
     expect(await page.getByTestId('secret-row').textContent()).not.toContain(marker)
 
-    // Open, reveal, copy, TOTP code.
+    // Open the view: reveal, TOTP code.
     await page.getByTestId('secret-row').click()
-    await expect(drawer.getByTestId('revealed-password').locator('input')).toHaveAttribute('type', 'password')
-    await drawer.getByTestId('reveal').click()
-    await expect(drawer.getByTestId('revealed-password').locator('input')).toHaveValue(marker)
-    await drawer.getByTestId('totp-load').click()
-    await expect(drawer.getByTestId('totp-code')).toHaveText(/^\d{6}$/)
+    await expect(view.getByTestId('revealed-password')).not.toHaveText(marker)
+    await view.getByTestId('reveal').click()
+    await expect(view.getByTestId('revealed-password')).toHaveText(marker)
+    await view.getByTestId('totp-load').click()
+    await expect(view.getByTestId('totp-code')).toHaveText(/^\d{6}$/)
 
-    // Rotate twice, list versions, restore v1 → v4.
+    // Edit: rotate twice; back to the view: list versions, restore v1 → v4.
+    await view.getByTestId('secret-edit').click()
+    await expect(view).toBeHidden()
     await drawer.getByTestId('new-password').locator('input').fill(marker + '-2')
     await drawer.getByTestId('password-comment').locator('input').fill('rotated')
     await drawer.getByTestId('change-password').click()
@@ -60,7 +66,9 @@ test.describe('warden secrets', () => {
     await drawer.getByTestId('new-password').locator('input').fill(marker + '-3')
     await drawer.getByTestId('change-password').click()
     await expect(drawer.getByText('Password (version 3)')).toBeVisible()
-    await drawer.getByTestId('open-versions').click()
+    await drawer.getByRole('button', { name: 'Close' }).click()
+    await expect(view).toBeVisible()
+    await view.getByTestId('open-versions').click()
     const versions = page.getByTestId('version-drawer')
     await expect(versions.getByTestId('version-3')).toBeVisible()
     await expect(versions.getByTestId('version-1')).toBeVisible()
@@ -69,16 +77,19 @@ test.describe('warden secrets', () => {
     await page.getByTestId('confirm-restore-yes').click()
     await expect(page.locator('.alert')).toContainText('version 4')
     await versions.getByRole('button', { name: 'Close' }).click()
-    await expect(drawer).toBeVisible()
+    await expect(view).toBeVisible()
 
-    // Move to the root and delete.
+    // Edit: move to the root (saving returns to the view); then delete from the view.
+    await view.getByTestId('secret-edit').click()
     await drawer.locator('select[data-field=folder_id]').selectOption('')
     await drawer.getByRole('button', { name: /^(Create|Save)$/ }).click()
     await expect(page.locator('.alert')).toContainText('Saved')
+    await expect(view).toBeVisible()
+    await page.keyboard.press('Escape')
     await page.getByRole('treeitem', { name: 'Root' }).click()
     await expect(page.getByTestId('secret-row').filter({ hasText: secretName })).toHaveCount(1)
     await page.getByTestId('secret-row').filter({ hasText: secretName }).click()
-    await drawer.getByTestId('secret-delete').click()
+    await view.getByTestId('secret-delete').click()
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
     await expect(page.locator('.alert')).toContainText('deleted')
     await expect(page.getByTestId('secret-row').filter({ hasText: secretName })).toHaveCount(0)

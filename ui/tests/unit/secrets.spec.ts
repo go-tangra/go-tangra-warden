@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import SecretsView from '@/views/secrets/index.vue'
-import SecretDetails from '@/components/SecretDetails.vue'
+import SecretView from '@/components/SecretView.vue'
+import SecretEditSections from '@/components/SecretEditSections.vue'
 import VersionDrawer from '@/components/VersionDrawer.vue'
 import { useSecrets } from '@/stores/secrets'
 import { useToast } from '@go-tangra/ui'
@@ -96,7 +97,7 @@ describe('secrets store', () => {
 describe('secrets view', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('renders the tree and the list, opens the drawer and hides the password until revealed', async () => {
+  it('renders the tree and the list, opens the read-only view drawer and hides the password until revealed', async () => {
     stubFetch((url) => {
       if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
       if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: url.includes('folder_id=f1') ? [db] : [] } }
@@ -115,13 +116,19 @@ describe('secrets view', () => {
     expect(w.find('[data-test="current-path"]').text()).toContain('Infra')
     await w.find('[data-test="secret-row"]').trigger('click')
     await flushPromises()
-    const drawer = document.body.querySelector('aside[role=dialog]')!
+    const drawer = document.body.querySelector('[data-test="secret-view-drawer"]')!
+    // The view drawer is read-only: no form, no edit drawer yet.
+    expect(drawer.querySelector('[data-field]')).toBeNull()
+    expect(document.body.querySelector('[data-test="secret-drawer"]')).toBeNull()
+    expect(drawer.querySelector('[data-test="secret-fields"]')!.textContent).toContain('/Infra')
     expect(drawer.textContent).not.toContain('WARDEN-MARKER')
-    const field = drawer.querySelector('[data-test="revealed-password"] input') as HTMLInputElement
-    expect(field.type).toBe('password')
+    expect(drawer.querySelector('[data-test="revealed-password"]')!.textContent).toBe('••••••••••••')
     click(drawer, '[data-test="reveal"]')
     await flushPromises()
-    expect((drawer.querySelector('[data-test="revealed-password"] input') as HTMLInputElement).value).toBe('WARDEN-MARKER-PW-ui')
+    expect(drawer.querySelector('[data-test="revealed-password"]')!.textContent).toBe('WARDEN-MARKER-PW-ui')
+    click(drawer, '[data-test="reveal"]') // hide again
+    await flushPromises()
+    expect(drawer.querySelector('[data-test="revealed-password"]')!.textContent).not.toContain('WARDEN-MARKER')
     // Nothing revealed is persisted anywhere in the browser.
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
@@ -210,7 +217,9 @@ describe('secrets view', () => {
     await flushPromises()
     await w.find('[data-test="secret-row"]').trigger('click')
     await flushPromises()
-    const drawer = document.body.querySelector('aside[role=dialog]')!
+    click(document.body, '[data-test="secret-edit"]')
+    await flushPromises()
+    const drawer = document.body.querySelector('[data-test="secret-drawer"]')!
     const sel = drawer.querySelector<HTMLSelectElement>('select[data-field="folder_id"]')!
     sel.value = 'f2'
     sel.dispatchEvent(new Event('change'))
@@ -285,7 +294,7 @@ describe('secret create/edit (schema + drawer)', () => {
     w.unmount()
   })
 
-  it('shows the TOTP code with a countdown and lets viewers only read', async () => {
+  it('shows the TOTP code with a countdown in the view', async () => {
     vi.useFakeTimers()
     stubFetch((url) => {
       if (url === '/api/warden/v1/secrets/s1/totp') return { status: 200, body: { code: '654321', period: 30, expires_in: 2 } }
@@ -293,7 +302,7 @@ describe('secret create/edit (schema + drawer)', () => {
       return { status: 200, body: { items: [] } }
     })
     const ro = { ...db, permissions: viewer }
-    const w = mountInLayout(SecretDetails, { secret: ro })
+    const w = mountInLayout(SecretView, { secret: ro })
     await flushPromises()
     const panel = w.element as HTMLElement
     expect(panel.querySelector('[data-test="change-password"]')).toBeNull()
@@ -322,17 +331,18 @@ describe('secret create/edit (schema + drawer)', () => {
       if (url === '/api/warden/v1/secrets/s1/password') return { status: 200, body: { password: 'WARDEN-MARKER-PW-copy', version: 1 } }
       return { status: 200, body: { items: [] } }
     })
-    const w = mountInLayout(SecretDetails, { secret: { ...db, has_totp: true } })
+    const w = mountInLayout(SecretView, { secret: { ...db, has_totp: true } })
     await flushPromises()
     const panel = w.element as HTMLElement
-    // The one-time code sits in the password section, right after the password field.
-    const section = panel.querySelector('[data-test="revealed-password"]')!.closest('section, [data-test="password-section"]')!
-    expect(section.querySelector('[data-test="totp-code"]')).not.toBeNull()
+    // The one-time code is the row right after the password (the v3 layout).
+    const labels = Array.from(panel.querySelectorAll('[data-test="secret-fields"] dt')).map((d) => d.textContent)
+    expect(labels.indexOf('2FA / TOTP')).toBe(labels.indexOf('Password') + 1)
+    expect(panel.querySelector('[data-test="totp-code"]')).not.toBeNull()
     click(panel, '[data-test="copy-password"]')
     await flushPromises()
     expect(written).toEqual(['WARDEN-MARKER-PW-copy'])
     // Copying does not reveal the value on screen.
-    expect((panel.querySelector('[data-test="revealed-password"] input') as HTMLInputElement).value).not.toContain('WARDEN-MARKER')
+    expect(panel.querySelector('[data-test="revealed-password"]')!.textContent).not.toContain('WARDEN-MARKER')
     click(panel, '[data-test="copy-totp"]')
     await flushPromises()
     expect(written).toEqual(['WARDEN-MARKER-PW-copy', '654321'])
@@ -346,7 +356,7 @@ describe('secret create/edit (schema + drawer)', () => {
 
   it('uses a known icon for sharing by email', async () => {
     stubFetch(() => ({ status: 200, body: { items: [] } }))
-    const w = mountInLayout(SecretDetails, { secret: db })
+    const w = mountInLayout(SecretView, { secret: db })
     await flushPromises()
     const btn = (w.element as HTMLElement).querySelector('[data-test="share-new"]')!
     expect(btn.innerHTML).not.toContain('email-fast')
@@ -356,11 +366,113 @@ describe('secret create/edit (schema + drawer)', () => {
 
   it('reports vault outages from reveal', async () => {
     stubFetch(() => ({ status: 503, body: { reason: 'vault_unavailable' } }))
-    const w = mountInLayout(SecretDetails, { secret: db })
+    const w = mountInLayout(SecretView, { secret: db })
     await flushPromises()
     click(w.element as HTMLElement, '[data-test="reveal"]')
     await flushPromises()
     expect(w.find('[data-test="drawer-error"]').text()).toContain('vault')
+    w.unmount()
+  })
+})
+
+describe('secret view and edit drawers (the v3 layout)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function server(calls: string[] = []) {
+    return stubFetch((url, init) => {
+      calls.push((init?.method ?? 'GET') + ' ' + url)
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
+      if (url === '/api/warden/v1/secrets/s1' && init?.method === 'PUT') return { status: 200, body: { ...db, name: 'renamed' } }
+      if (url === '/api/warden/v1/secrets/s1/password' && init?.method === 'PUT') return { status: 200, body: { version: 2 } }
+      if (url === '/api/warden/v1/secrets/s1') return { status: 200, body: { ...db, current_version: 2 } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: url.includes('folder_id=f1') ? [db] : [], total: url.includes('folder_id=f1') ? 1 : 0 } }
+      return { status: 200, body: { items: [] } }
+    })
+  }
+  async function openRow(w: ReturnType<typeof mountInLayout>) {
+    await flushPromises()
+    await w.findAll('[role=treeitem]').find((i) => i.text() === 'Infra')!.trigger('click')
+    await flushPromises()
+    await w.find('[data-test="secret-row"]').trigger('click')
+    await flushPromises()
+  }
+  const view = () => document.body.querySelector('[data-test="secret-view-drawer"]')
+  const edit = () => document.body.querySelector('[data-test="secret-drawer"]')
+
+  it('Edit replaces the view with the edit drawer; closing it goes back to the view', async () => {
+    server()
+    const w = mountInLayout(SecretsView, {})
+    await openRow(w)
+    expect(view()).not.toBeNull()
+    click(document.body, '[data-test="secret-edit"]')
+    await flushPromises()
+    expect(view()).toBeNull()
+    // Details form first, then the password and one-time code sections.
+    const sections = Array.from(edit()!.querySelectorAll('[data-test="password-section"], [data-test="totp-section"]')).map((e) => e.getAttribute('data-test'))
+    expect(sections).toEqual(['password-section', 'totp-section'])
+    expect(edit()!.querySelector('input[data-field="name"]')).not.toBeNull()
+    expect(edit()!.querySelector('h2')!.textContent).toBe('Edit prod-db')
+    ;(Array.from(edit()!.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Close') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(edit()).toBeNull()
+    expect(view()).not.toBeNull()
+    w.unmount()
+  })
+
+  it('saving the details returns to the view of the saved secret; a new password keeps the edit drawer open', async () => {
+    const calls: string[] = []
+    server(calls)
+    const w = mountInLayout(SecretsView, {})
+    await openRow(w)
+    click(document.body, '[data-test="secret-edit"]')
+    await flushPromises()
+    type(edit()!, '[data-test="new-password"]', 'WARDEN-MARKER-PW-new')
+    await flushPromises()
+    click(edit()!, '[data-test="change-password"]')
+    await flushPromises()
+    expect(calls).toContain('PUT /api/warden/v1/secrets/s1/password')
+    expect(edit()).not.toBeNull()
+    expect(edit()!.querySelector('[data-test="password-section"]')!.textContent).toContain('version 2')
+    ;(Array.from(edit()!.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save') as HTMLButtonElement).click()
+    await flushPromises()
+    expect(calls).toContain('PUT /api/warden/v1/secrets/s1')
+    expect(edit()).toBeNull()
+    expect(view()!.querySelector('h2')!.textContent).toBe('renamed')
+    w.unmount()
+  })
+
+  it('viewers get the view only: no Edit, no Delete, no Share', async () => {
+    stubFetch((url) => {
+      if (url === '/api/warden/v1/folders/tree') return { status: 200, body: { items: [node(infra)] } }
+      if (url.startsWith('/api/warden/v1/secrets?')) return { status: 200, body: { items: url.includes('folder_id=f1') ? [{ ...db, permissions: viewer }] : [], total: 1 } }
+      return { status: 200, body: { items: [] } }
+    })
+    const w = mountInLayout(SecretsView, {})
+    await openRow(w)
+    expect(view()).not.toBeNull()
+    for (const t of ['secret-edit', 'secret-delete', 'secret-share']) expect(view()!.querySelector(`[data-test="${t}"]`)).toBeNull()
+    expect(view()!.querySelector('[data-test="open-versions"]')).not.toBeNull()
+    w.unmount()
+  })
+
+  it('the edit sections set a TOTP seed when there is none', async () => {
+    const calls: string[] = []
+    stubFetch((url, init) => {
+      calls.push((init?.method ?? 'GET') + ' ' + url)
+      if (url === '/api/warden/v1/secrets/s1') return { status: 200, body: { ...db, has_totp: true } }
+      return { status: 204, body: null }
+    })
+    const got: unknown[] = []
+    const w = mountInLayout(SecretEditSections, { secret: { ...db, has_totp: false }, onSaved: (s: unknown) => got.push(s) })
+    await flushPromises()
+    const panel = w.element as HTMLElement
+    expect(panel.querySelector('[data-test="totp-code"]')).toBeNull()
+    type(panel, '[data-test="totp-seed"]', 'JBSWY3DPEHPK3PXP')
+    await flushPromises()
+    click(panel, '[data-test="totp-save"]')
+    await flushPromises()
+    expect(calls).toContain('PUT /api/warden/v1/secrets/s1/totp')
+    expect(got.length).toBe(1)
     w.unmount()
   })
 })

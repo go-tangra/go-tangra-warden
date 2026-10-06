@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAbility } from '@casl/vue'
-import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, useListQuery, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
+import { UiPage, UiAlert, UiCard, UiButton, UiTree, UiDataTable, UiInput, UiForm, UiIcon, UiDropdownMenu, UiDrawer, UiRecordDrawer, UiStatGrid, UiStatTile, UiKeyValueTable, UiPermissionDrawer, usePermissionGrants, useToast, useConfirm, useListQuery, type Column, type MenuItem, type TreeNode } from '@go-tangra/ui'
 import { useZodForm, zodToFields } from '@go-tangra/ui/forms'
 import { ApiError, describe } from '@/api/client'
 import type { Folder, FolderNode, Secret } from '@/api/types'
@@ -12,7 +12,8 @@ import { useOps } from '@/stores/ops'
 import { useDirectory } from '@/stores/directory'
 import { grantable, usePermissions, type Relation, type SubjectType } from '@/stores/permissions'
 import FolderActions from '@/components/FolderActions.vue'
-import SecretDetails from '@/components/SecretDetails.vue'
+import SecretView from '@/components/SecretView.vue'
+import SecretEditSections from '@/components/SecretEditSections.vue'
 import VersionDrawer from '@/components/VersionDrawer.vue'
 import BitwardenImportDialog from '@/components/BitwardenImportDialog.vue'
 import { downloadJSON } from '@/api/download'
@@ -28,7 +29,8 @@ const ability = useAbility()
 const toast = useToast()
 const confirm = useConfirm()
 const selected = ref<string | null>(null)
-const drawer = ref(false)
+const viewing = ref(false) // the read-only view drawer
+const drawer = ref(false) // the create/edit drawer
 const versions = ref(false)
 const sharing = ref(false)
 const current = ref<Secret | null>(null)
@@ -120,7 +122,8 @@ function onRow(r: Row): void {
   else if (r.secret) open(r.secret)
 }
 
-// --- secret drawer: kit record form (create vs edit schema) + vault details ---
+// --- secret drawers (the v3 layout): a read-only view drawer, and a separate
+// create/edit drawer (kit record form + password and one-time code sections) ---
 const folderOptions = computed(() => folders.flat().map((f) => ({ title: f.folder.path, value: f.folder.id })))
 const schema = computed(() => (current.value ? secretUpdateSchema : secretCreateSchema))
 const fields = computed(() => zodToFields(schema.value, { folder_id: { type: 'select', options: folderOptions.value, placeholder: 'Root' }, host_url: { label: 'Host URL' }, description: { type: 'textarea', cols: 12 }, metadata: { label: 'Metadata (JSON)', type: 'textarea', cols: 12 }, password: { type: 'secret' }, totp: { label: 'TOTP seed (optional)', type: 'secret' } }))
@@ -142,26 +145,46 @@ async function submit(v: Record<string, unknown>): Promise<Secret> {
   }
   return secrets.create({ folder_id, name: v.name as string, username: v.username as string, host_url: v.host_url as string, description: v.description as string, metadata: v.metadata as Record<string, unknown>, password: v.password as string, totp: v.totp as string | undefined })
 }
-function open(s: Secret | null): void {
+/** A row opens the secret's view drawer. */
+function open(s: Secret): void {
   current.value = s
+  viewing.value = true
+}
+/** New secret: the create drawer, empty. */
+function openNew(): void {
+  current.value = null
   drawer.value = true
 }
+/** Edit replaces the view drawer; closing the edit drawer brings the view back. */
+function openEdit(): void {
+  viewing.value = false
+  drawer.value = true
+}
+watch(drawer, (open, was) => {
+  if (was && !open && current.value) viewing.value = true
+})
+// The details form saved (create or edit): the drawer closes onto the secret's view.
 function saved(v: unknown): void {
   const s = v as Secret
   current.value = s
   toast.success('Saved ' + s.name + '.')
   void secrets.refresh()
 }
-// Secondary drawers replace the secret drawer; closing them brings it back.
-function openVersions(s: Secret): void {
+// The password or one-time code changed in the edit drawer, which stays open.
+function updated(s: Secret): void {
   current.value = s
-  drawer.value = false
+  toast.success('Saved ' + s.name + '.')
+  void secrets.refresh()
+}
+// Secondary drawers replace the view drawer; closing them brings it back.
+function openVersions(): void {
+  viewing.value = false
   versions.value = true
 }
 function closeSecondary(): void {
   versions.value = false
   sharing.value = false
-  drawer.value = true
+  viewing.value = true
 }
 async function restored(v: number): Promise<void> {
   toast.success('Restored as version ' + v + '.')
@@ -171,7 +194,7 @@ async function removeSecret(): Promise<void> {
   if (!current.value || !(await confirm.ask({ title: 'Delete secret?', text: 'Every version is destroyed in the vault. This cannot be undone.', danger: true, confirmLabel: 'Delete' }))) return
   try {
     await secrets.remove(current.value.id)
-    drawer.value = false
+    viewing.value = false
     toast.success('Secret deleted.')
   } catch (e) {
     secrets.error = (e as Error).message
@@ -188,7 +211,7 @@ const access = usePermissionGrants({
 })
 async function openShare(): Promise<void> {
   if (!current.value) return
-  drawer.value = false
+  viewing.value = false
   sharing.value = true
   await Promise.all([perms.load('secret', current.value.id), dir.loadRoles()])
   await access.resolve()
@@ -258,7 +281,7 @@ const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.
 <template>
   <UiPage title="Secrets" data-test="warden-secrets">
     <template #actions>
-      <UiButton v-if="canCreateHere" icon="mdi-plus" data-test="new-secret" @click="open(null)">New secret</UiButton>
+      <UiButton v-if="canCreateHere" icon="mdi-plus" data-test="new-secret" @click="openNew">New secret</UiButton>
       <UiDropdownMenu v-if="moreItems.length" :items="moreItems" label="More actions" data-test="more-actions" @select="onMore" />
     </template>
     <UiAlert v-if="secrets.error" kind="error" class="mb-3" data-test="list-error">{{ errorText }}</UiAlert>
@@ -328,14 +351,19 @@ const statItems = computed(() => (ops.stats ? [{ label: 'Grants', value: Object.
       </UiCard>
     </template>
 
-    <UiRecordDrawer v-model="drawer" :title="current ? current.name : 'New secret'" :schema="schema" :fields="fields" :initial="initial" :submit="submit" size="lg" :save-label="current ? 'Save' : 'Create'" :readonly="!!current && !current.permissions.write" data-test="secret-drawer" @saved="saved">
+    <UiDrawer v-model="viewing" :title="current?.name ?? 'Secret'" size="lg" data-test="secret-view-drawer">
+      <SecretView v-if="current && viewing" :secret="current" />
+      <template #actions>
+        <UiButton v-if="current?.permissions.delete" variant="text" color="error" data-test="secret-delete" @click="removeSecret">Delete</UiButton>
+        <span class="grow" />
+        <UiButton variant="text" icon="mdi-history" data-test="open-versions" @click="openVersions">Versions</UiButton>
+        <UiButton v-if="current?.permissions.share" variant="soft" icon="mdi-shield-account-outline" data-test="secret-share" @click="openShare">Share access</UiButton>
+        <UiButton v-if="current?.permissions.write" icon="mdi-pencil-outline" data-test="secret-edit" @click="openEdit">Edit</UiButton>
+      </template>
+    </UiDrawer>
+    <UiRecordDrawer v-model="drawer" :title="current ? 'Edit ' + current.name : 'New secret'" :schema="schema" :fields="fields" :initial="initial" :submit="submit" size="lg" :save-label="current ? 'Save' : 'Create'" close-on-save data-test="secret-drawer" @saved="saved">
       <template #after>
-        <SecretDetails v-if="current" :secret="current" @saved="saved" @versions="openVersions" />
-        <div v-if="current" class="mt-4 flex flex-wrap gap-2">
-          <UiButton v-if="current.permissions.share" variant="soft" size="sm" icon="mdi-shield-account-outline" data-test="secret-share" @click="openShare">Share access</UiButton>
-          <span class="grow" />
-          <UiButton v-if="current.permissions.delete" variant="text" size="sm" color="error" data-test="secret-delete" @click="removeSecret">Delete</UiButton>
-        </div>
+        <SecretEditSections v-if="current" :secret="current" @saved="updated" />
       </template>
     </UiRecordDrawer>
     <VersionDrawer :model-value="versions" :secret="current" @update:model-value="closeSecondary" @restored="restored" />
