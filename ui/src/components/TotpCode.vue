@@ -54,11 +54,14 @@ onBeforeUnmount(() => { stop(); if (copiedTimer) clearTimeout(copiedTimer) })
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2" data-test="totp-row">
-    <output class="font-mono text-2xl font-semibold tracking-widest text-primary" data-test="totp-code">{{ code?.code ?? '------' }}</output>
-    <span v-if="code" class="flex items-center gap-1.5" data-test="totp-countdown">
-      <progress class="progress h-1.5 w-20" :class="expiring ? 'progress-warning' : 'progress-primary'" :value="remaining * 100" max="100" :aria-label="'One-time code expires in ' + code.expires_in + ' seconds'" data-test="totp-progress" />
-      <span class="w-7 text-xs tabular-nums" :class="expiring ? 'text-warning' : 'text-base-content/70'" data-test="totp-expires">{{ code.expires_in }}s</span>
+  <div class="flex flex-wrap items-start gap-2" data-test="totp-row">
+    <!-- The countdown bar sits under the digits, as wide as the code. -->
+    <span class="inline-flex flex-col gap-1" data-test="totp-display">
+      <output class="font-mono text-2xl font-semibold tracking-widest text-primary" data-test="totp-code">{{ code?.code ?? '------' }}</output>
+      <span v-if="code" class="flex items-center gap-1.5" data-test="totp-countdown">
+        <progress class="progress h-1.5 min-w-0 flex-1" :class="expiring ? 'progress-warning' : 'progress-primary'" :value="remaining * 100" max="100" :aria-label="'One-time code expires in ' + code.expires_in + ' seconds'" data-test="totp-progress" />
+        <span class="w-7 text-end text-xs tabular-nums" :class="expiring ? 'text-warning' : 'text-base-content/70'" data-test="totp-expires">{{ code.expires_in }}s</span>
+      </span>
     </span>
     <UiButton v-if="!code" variant="soft" size="xs" data-test="totp-load" @click="load">Show code</UiButton>
     <UiButton variant="text" size="xs" :icon="copied ? 'mdi-check' : 'mdi-content-copy'" icon-only :label="copied ? 'Copied' : 'Copy one-time code'" data-test="copy-totp" @click="copy" />

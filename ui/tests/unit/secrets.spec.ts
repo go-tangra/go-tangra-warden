@@ -311,6 +311,9 @@ describe('secret create/edit (schema + drawer)', () => {
     await flushPromises()
     expect(panel.querySelector('[data-test="totp-code"]')!.textContent).toBe('654321')
     expect(panel.querySelector('[data-test="totp-expires"]')!.textContent).toBe('2s')
+    // The countdown sits under the code, in the same column.
+    const display = panel.querySelector('[data-test="totp-display"]')!
+    expect(Array.from(display.children).map((c) => c.getAttribute('data-test'))).toEqual(['totp-code', 'totp-countdown'])
     const bar = () => panel.querySelector('[data-test="totp-progress"]') as HTMLProgressElement
     expect(bar().value).toBeCloseTo((2 / 30) * 100)
     expect(bar().getAttribute('aria-label')).toBe('One-time code expires in 2 seconds')
