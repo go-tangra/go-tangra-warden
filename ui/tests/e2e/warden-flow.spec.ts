@@ -42,12 +42,13 @@ test.describe('warden remote', () => {
       await pwd.fill(marker)
       await drawer.getByRole('button', { name: 'Create' }).click()
       await expect(page.locator('.alert')).toContainText('Saved')
-      await page.getByTestId('secret-row').filter({ hasText: marker }).first().click()
-      await drawer.getByTestId('reveal').click()
-      await expect(drawer.getByTestId('revealed-password').locator('input')).toHaveValue(marker)
+      // Creating opens the new secret's read-only view.
+      const view = page.getByTestId('secret-view-drawer')
+      await view.getByTestId('reveal').click()
+      await expect(view.getByTestId('revealed-password')).toHaveText(marker)
       expect(await page.evaluate(() => JSON.stringify([Object.keys(localStorage), Object.keys(sessionStorage)]))).not.toContain(marker)
       // Share dialog refuses a bad recipient and CIDR client-side.
-      await drawer.getByTestId('share-new').click()
+      await view.getByTestId('share-new').click()
       const dialog = page.getByTestId('share-dialog')
       await dialog.locator('input[data-field=recipient_email]').fill('nope')
       await dialog.locator('input[data-field=cidr]').fill('not a cidr')
