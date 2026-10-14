@@ -42,7 +42,10 @@ LABEL org.opencontainers.image.source="https://github.com/go-tangra/go-tangra-wa
       org.opencontainers.image.title="go-tangra-warden" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}"
-RUN apk add --no-cache ca-certificates postgresql-client && adduser -D -u 10001 app
+# /state: mount point for the enrolment state (join bundle), owned by the
+# service user so a fresh named volume is writable.
+RUN apk add --no-cache ca-certificates postgresql-client && adduser -D -u 10001 app \
+    && install -d -o app -g app /state
 COPY --from=build /out/wardensvc /usr/local/bin/
 COPY deploy /app/deploy
 WORKDIR /app

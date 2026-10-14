@@ -1,0 +1,57 @@
+# warden configuration, rendered by the gateway's add-module wizard: every
+# ${...} below was filled from the core's own configuration, the generated
+# passwords or the inputs given in the wizard, so the issuer, trust domain
+# and addresses match the core exactly.
+service_name: warden
+trust_domain: ${TRUST_DOMAIN}
+env: production
+identity:
+  provider: provided
+enroll:
+  enabled: true
+  enroll_url: ${LCM_ENROLL_URL}
+  lcm_grpc: ${LCM_GRPC}
+  tenant_id: ${MESH_TENANT_ID}
+  token_file: /tokens/enrollment.token
+  state_file: /state/svid.json
+authz: { source: file, path: /app/policy.yaml }
+server: { grpc_addr: 0.0.0.0:9843, http_addr: 0.0.0.0:9844 }
+admin: { addr: 127.0.0.1:9490 }
+discovery:
+  static:
+    gateway: ["${GATEWAY_GRPC}"]
+    auth: ["${AUTH_GRPC}"]
+    notification: ["${NOTIFICATION_GRPC}"]
+limits:
+  max_request_bytes: 16842752 # Bitwarden / backup uploads (16 MiB + slack); JSON handlers keep their own 64 KiB cap
+limits_warden:
+  transfer_max_bytes: 16777216
+db:
+  dsn: postgres://warden_app:${GEN_PASSWORD_2}@warden-db:5432/warden?sslmode=verify-full&sslrootcert=/tls/ca.pem
+  migrate_dsn: postgres://postgres:${GEN_PASSWORD_1}@warden-db:5432/warden?sslmode=verify-full&sslrootcert=/tls/ca.pem
+  max_conns: 16
+valkey:
+  addresses: ["warden-valkey:6379"]
+  username: warden
+  password: ${GEN_PASSWORD_3}
+  ca_file: /tls/ca.pem
+# The vault is not part of the bundle: warden keeps secret material in an
+# existing HashiCorp Vault (KV v2 mount, AppRole; contracts/vault-layout.md).
+# Put role_id, secret_id and the CA of the vault's certificate in
+# private/vault/ before the first start.
+vault:
+  address: ${VAULT_ADDR}
+  mount: ${VAULT_MOUNT}
+  role_id_file: /run/secrets/vault/role_id
+  secret_id_file: /run/secrets/vault/secret_id
+  ca_file: /run/secrets/vault/ca.pem
+gateway:
+  service: gateway
+  issuer: ${GATEWAY_ISSUER}
+# Share links point at the platform's public origin (the issuer's origin).
+share:
+  public_origin: ${GATEWAY_ISSUER}
+# Share links are mailed by the notification module (system template
+# warden.share); the relay is configured once, in notification.
+mail:
+  transport: notification

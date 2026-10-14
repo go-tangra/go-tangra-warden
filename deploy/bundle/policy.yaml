@@ -1,0 +1,27 @@
+# Freya service-to-service policy for warden (rendered for this core's trust
+# domain): deny by default; the gateway forwards browser traffic and gRPC
+# ingress, and the modules that resolve secret references call exactly the
+# methods they need (the call still carries the user's platform token and
+# passes warden's per-secret check and audit).
+version: warden-join-1
+rules:
+  - id: gateway-forwards
+    from: ["spiffe://${TRUST_DOMAIN}/svc/gateway"]
+    to: ["warden"]
+    operations: ["*"]
+    effect: allow
+  - id: ticket-secrets
+    from: ["spiffe://${TRUST_DOMAIN}/svc/ticket"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/GetPassword"]
+    effect: allow
+  - id: ipam-bmc-secrets
+    from: ["spiffe://${TRUST_DOMAIN}/svc/ipam"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/Get", "/warden.v1.Secrets/GetPassword"]
+    effect: allow
+  - id: signing-tsa-secrets
+    from: ["spiffe://${TRUST_DOMAIN}/svc/signing"]
+    to: ["warden"]
+    operations: ["/warden.v1.Secrets/Get", "/warden.v1.Secrets/GetPassword"]
+    effect: allow
