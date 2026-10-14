@@ -1,0 +1,26 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/go-tangra/go-tangra-warden/v4/pkg/wardenmanifest"
+)
+
+// The release step lists the permissions from the module's own manifest.
+func TestCataloguePermissions(t *testing.T) {
+	var out bytes.Buffer
+	if code := cataloguePermissions(&out); code != 0 {
+		t.Fatal(code)
+	}
+	var perms []string
+	if err := json.Unmarshal(out.Bytes(), &perms); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(perms, ",") != strings.Join(wardenmanifest.PermissionRefs(), ",") || len(perms) != len(wardenmanifest.Permissions) ||
+		!strings.Contains(strings.Join(perms, ","), "secrets:read") {
+		t.Fatalf("%v", perms)
+	}
+}

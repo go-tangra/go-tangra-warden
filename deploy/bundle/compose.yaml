@@ -1,0 +1,70 @@
+# warden join bundle, rendered by the gateway's add-module wizard.
+#   docker compose up -d
+# Values come from .env (written by the gateway: core addresses, generated
+# passwords, and the host inputs you gave). private/ holds the single-use
+# enrolment token, the mesh CA and this bundle's own TLS material; add the
+# Vault AppRole credentials and CA under private/vault/ (see README.md).
+name: tangra-warden
+services:
+  warden-db:
+    image: timescale/timescaledb:2.17.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: warden
+      POSTGRES_PASSWORD: ${GEN_PASSWORD_1}
+      WARDEN_APP_PASSWORD: ${GEN_PASSWORD_2}
+    # The server key must belong to the postgres user: copy it before start.
+    entrypoint: ["sh", "-c", "install -d -o postgres -m 0700 /tls-pg && install -o postgres -m 0600 /tls/warden-db.key /tls-pg/server.key && install -o postgres -m 0644 /tls/warden-db.crt /tls-pg/server.crt && exec docker-entrypoint.sh \"$$@\"", "--"]
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/tls-pg/server.crt", "-c", "ssl_key_file=/tls-pg/server.key"]
+    volumes:
+      - warden-db:/var/lib/postgresql/data
+      - ./private/tls:/tls:ro
+      - ./init-db.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d warden"]
+      interval: 5s
+      retries: 30
+  warden-valkey:
+    image: valkey/valkey:8.0
+    restart: unless-stopped
+    environment:
+      WARDEN_VALKEY_PASSWORD: ${GEN_PASSWORD_3}
+    # TLS only (no plaintext port); the default user is disabled, warden has
+    # its own ACL user. The key is copied for the valkey user before start.
+    entrypoint: ["sh", "-c", "install -d -o valkey -m 0700 /tls-vk && install -o valkey -m 0600 /tls/warden-valkey.key /tls-vk/server.key && install -o valkey -m 0644 /tls/warden-valkey.crt /tls-vk/server.crt && exec docker-entrypoint.sh valkey-server --port 0 --tls-port 6379 --tls-cert-file /tls-vk/server.crt --tls-key-file /tls-vk/server.key --tls-ca-cert-file /tls/ca.pem --tls-auth-clients no --user default off --user warden on \">$$WARDEN_VALKEY_PASSWORD\" '~*' '&*' +@all"]
+    volumes:
+      - warden-valkey:/data
+      - ./private/tls:/tls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --tls --cacert /tls/ca.pem -h warden-valkey --user warden --pass \"$$WARDEN_VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      retries: 30
+  warden-bootstrap:
+    image: ${MODULE_IMAGE}:${MODULE_VERSION}
+    command: ["bootstrap", "-config", "/app/config.yaml"]
+    volumes: &warden-volumes
+      - ./config.yaml:/app/config.yaml:ro
+      - ./policy.yaml:/app/policy.yaml:ro
+      - ./private/enrollment.token:/tokens/enrollment.token:ro
+      - ./private/tls/ca.pem:/tls/ca.pem:ro
+      - ./private/vault:/run/secrets/vault:ro
+      - warden-state:/state
+    depends_on:
+      warden-db: { condition: service_healthy }
+      warden-valkey: { condition: service_healthy }
+  warden:
+    image: ${MODULE_IMAGE}:${MODULE_VERSION}
+    restart: unless-stopped
+    command: ["-config", "/app/config.yaml"]
+    environment:
+      FREYA_ADVERTISE_HOST: ${MODULE_ADVERTISE_HOST}
+    ports:
+      - "${MODULE_BIND_IP}:9843:9843"
+      - "${MODULE_BIND_IP}:9844:9844"
+    volumes: *warden-volumes
+    depends_on:
+      warden-bootstrap: { condition: service_completed_successfully }
+volumes:
+  warden-db: {}
+  warden-valkey: {}
+  warden-state: {}
