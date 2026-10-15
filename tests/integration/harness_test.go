@@ -242,6 +242,10 @@ limits:
 	if err != nil {
 		t.Fatalf("warden build: %v", err)
 	}
+	// The embedded help pages are loaded; their digest goes to the gateway.
+	if w.Docs.Empty() || w.Docs.Digest == "" {
+		t.Fatal("help docs not loaded")
+	}
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() { done <- w.Run(runCtx) }()
